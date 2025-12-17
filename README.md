@@ -1,3 +1,8 @@
+# Feedback from Dr. Alon on initial proposal (below):
+
+Remove Lyria Realtime API and just have a speech-to-text webapp that extracts semantics from the transcript.
+
+
 # SoundScaper (I'm bad at naming things)
 
 A small full-stack project that combines a Python backend, a TypeScript frontend, and basic Google Cloud services.
