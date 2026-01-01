@@ -83,7 +83,7 @@ Infrastructure:
 
 ---
 
-##Development
+## Development
 
 ### Run the backend locally:
 ```
@@ -97,5 +97,24 @@ uvicorn app.main:app --reload
 ```
 cd web
 npm install
-npm run dev****
+npm run dev
 ```
+
+### GCP setup
+
+This application requires the following Google Cloud services:
+
+1. **Google Cloud Speech-to-Text API**
+2. **Gemini API** (via Vertex AI)
+3. **Cloud Firestore**
+
+#### Prerequisites
+
+- A Google Cloud Platform account
+- A GCP project with billing enabled
+- The `gcloud` CLI installed
+- The 3 services above enabled on the project
+
+#### Authentication using Application Default Credentials (ADC)
+
+This application uses Application Default Credentials (ADC) to authenticate with Google Cloud services. ADC automatically finds credentials based on the application environment.
