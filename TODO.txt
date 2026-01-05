@@ -1,8 +1,5 @@
-error handling / input validation
-ask for review
-
-pytest
-cicd
-docker
+error handling / input validation for endpoints
+add tests with pytest
+add simple cicd to build/run tests/push to docker container
 
 separate / cleanup code? -> Tim said not to on 1st ver

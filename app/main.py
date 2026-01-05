@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from .models import Mood, Transcript, Response
 from google.cloud import speech_v1 as speech
@@ -36,27 +36,21 @@ app.add_middleware(
 async def transcribe(file: UploadFile = File(...)):
     # file check
     if (file.content_type != "audio/webm"):
-        return Response(
-            success=False,
-            error="Invalid file type. Only audio/webm is supported."
-        )
-    
+        raise HTTPException(status_code=400, detail="Invalid file type. Only audio/webm is supported.")
+        
     if (file.filename is None or file.filename == ""):
-        return Response(
-            success=False,
-            error="No file uploaded."
-        )
+        raise HTTPException(status_code=400, detail="No file uploaded.")
     
     if (file.size is None or file.size == 0):
-        return Response(
-            success=False,
-            error="Empty file uploaded."
-        )
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
     
     # read file bytes
     data = await file.read()
     sample_rate = 48000
 
+    if not data:
+        raise HTTPException(status_code=400, detail="Failed to read file.")
+    
     # send bytes to google stt
     audio = speech.RecognitionAudio(content=data)
     config = speech.RecognitionConfig(
@@ -65,6 +59,9 @@ async def transcribe(file: UploadFile = File(...)):
         language_code="en-US",
     )
     response = speech_client.recognize(config=config, audio=audio)
+
+    if not response.results:
+        raise HTTPException(status_code=400, detail="Transcription failed.")
 
     # return transcript in pydantic model
     return Transcript(
@@ -77,6 +74,9 @@ async def transcribe(file: UploadFile = File(...)):
 # https://ai.google.dev/gemini-api/docs/structured-output?example=recipe
 @app.post("/v1/analyze_mood/")
 async def analyze(transcript: Transcript):
+    if not transcript.text:
+        raise HTTPException(status_code=400, detail="Transcript text is empty.")
+
     propmt = "Analyze the mood of the following transcript:"
 
     # remove confidence to force gemini to gen one
@@ -91,15 +91,21 @@ async def analyze(transcript: Transcript):
         },
     )
 
+    if not response.text:
+        raise HTTPException(status_code=400, detail="Mood analysis failed.")
+
     mood = Mood.model_validate_json(response.text)
     return mood
 
 # upload to firestore endpoint
 @app.post("/v1/firestore_upload/")
 async def upload_to_firestore(response: Response):
+    if not response:
+        raise HTTPException(status_code=400, detail="No response data provided.")
+
     # insert response into firestore
     doc_ref = db.collection(u'record')
-    doc_ref.document(response.transcript.uid).set({
+    write_res = doc_ref.document(response.transcript.uid).set({
         u'created_at': firestore.SERVER_TIMESTAMP,
         u'mood': {
             u'confidence': response.mood.confidence,
@@ -110,13 +116,17 @@ async def upload_to_firestore(response: Response):
         u'transcript_confidence': response.transcript.confidence,
         u'uid': response.transcript.uid,
     })
+
+    if not write_res.update_time:
+        raise HTTPException(status_code=400, detail="Failed to upload to Firestore.")
+
     return {"success": True, "uid": response.transcript.uid}
 
 # get all from firestore endpoint
 @app.get("/v1/firestore_get/")
 async def get_from_firestore():
-    docs = db.collection(u'record').stream()
+    rows = db.collection(u'record').stream()
     records = []
-    for doc in docs:
-        records.append(doc.to_dict())
+    for row in rows:
+        records.append(row.to_dict())
     return records
