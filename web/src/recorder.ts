@@ -75,6 +75,11 @@ export default class Recorder {
           let transcript: Transcript = { uid: '', text: '' };
           try {
             transcript = await this.uploadSpeech(audioBlob);
+
+            if (!transcript.text || transcript.text === "") {
+              throw new Error('Incomplete transcript data received from STT service');
+            }
+          
             console.log('Transcription result:', transcript);
           } catch (err) {
             console.error('Failed to upload audio:', err);
@@ -83,23 +88,29 @@ export default class Recorder {
           // transcript to gemini
           let geminiResponse: Mood = { uid: '', mood: '', confidence: 0 };
           try {
-            if (!transcript || !transcript.text) {
-              throw new Error('No transcript available for Gemini upload');
-            }
             geminiResponse = await this.uploadTranscript(transcript);
+            
+            if (!geminiResponse.mood || geminiResponse.mood === "") {
+              throw new Error('Incomplete mood data received from Gemini service');
+            }
+            
             console.log('Gemini response:', geminiResponse);
           } catch (err) {
             console.error('Failed to get response from Gemini:', err);
           }
 
           // upload to firestore
-          let data: { transcript: Transcript; mood: Mood } = { transcript, mood: geminiResponse };
           try {
             if (!transcript.uid || !geminiResponse.uid || !transcript.text || !geminiResponse.mood) {
               throw new Error('Incomplete data for Firestore upload');
             }
-            data = await this.uploadResponse(data);
-            console.log('Uploaded response to Firestore:', data);
+            let response = await this.uploadToFirestore(transcript, geminiResponse);
+
+            if (response.success !== true || !response.uid) {
+              throw new Error('Invalid data received from Firestore upload');
+            }
+
+            console.log('Uploaded response to Firestore:', response);
           } catch (err) {
             console.error('Failed to upload response to Firestore:', err);
           }
@@ -159,12 +170,24 @@ export default class Recorder {
   }
 
   // upload combined response to firestore
-  private async uploadResponse(data: { transcript: Transcript; mood: Mood }) {
+  private async uploadToFirestore(transcript: Transcript, mood: Mood) {
+    if (!transcript || !mood) {
+      throw new Error('Invalid data for Firestore upload');
+    }
+
+    if (!transcript.text || transcript.text === "") {
+      throw new Error('Incomplete transcript data for Firestore upload');
+    }
+
+    if (!mood.mood || mood.mood === "") {
+      throw new Error('Incomplete mood data for Firestore upload');
+    }
+
     const response = await fetch(
       'http://localhost:8000/v1/firestore_upload/',
       {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify({ transcript, mood }),
         headers: {
           'Content-Type': 'application/json'
         }
@@ -181,6 +204,10 @@ export default class Recorder {
 
   // upload audio blob to stt service
   private async uploadSpeech(audioBlob: Blob) {
+    if (!audioBlob || audioBlob.size === 0) {
+      throw new Error('Invalid audio blob for transcription');
+    }
+
     const form = new FormData();
 
     form.append('file', audioBlob, 'speech.webm');
@@ -203,6 +230,10 @@ export default class Recorder {
 
   // upload transcript to gemini for mood analysis
   private async uploadTranscript(transcript: Transcript) {
+    if (!transcript || !transcript.text) {
+      throw new Error('Invalid transcript for mood analysis');
+    }
+
     const response = await fetch(
       'http://localhost:8000/v1/analyze_mood/',
       {
