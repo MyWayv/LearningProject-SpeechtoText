@@ -6,4 +6,4 @@ dist/
 env/
 .DS_Store
 .pytest_cache/
-app/static/
+static/
