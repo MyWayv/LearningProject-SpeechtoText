@@ -7,7 +7,7 @@ COPY web/ ./
 RUN npm run build
 
 # backend
-FROM python:3.14.1-slim-bullseye AS backend
+FROM python:3.14.2-slim-trixie AS backend
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
