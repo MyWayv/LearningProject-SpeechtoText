@@ -101,13 +101,15 @@ This application requires the following Google Cloud services:
 1. **Google Cloud Speech-to-Text API**
 2. **Gemini API** (via Vertex AI)
 3. **Cloud Firestore**
+4. **Google Artifact Registry**
+5. **Workload Identity Federation**
 
 #### Prerequisites
 
 - A Google Cloud Platform account
 - A GCP project with billing enabled
 - The `gcloud` CLI installed
-- The 3 services above enabled on the project
+- The 5 services above enabled and configured on the project
 
 #### Authentication using Application Default Credentials (ADC)
 
