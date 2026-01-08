@@ -1,13 +1,15 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from pathlib import Path
+from typing import Annotated
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from .models import Mood, Transcript
-from google.cloud import speech_v1 as speech
 from google import genai
 from google.auth import default
 from google.cloud import firestore
-from pathlib import Path
-from typing import Annotated
+from google.cloud import speech_v1 as speech
+
+from .models import Mood, Transcript
 
 # clients startup
 credentials, project = default()
