@@ -7,6 +7,7 @@ from google import genai
 from google.auth import default
 from google.cloud import firestore
 from pathlib import Path
+from typing import Annotated
 
 # clients startup
 credentials, project = default()
@@ -40,7 +41,7 @@ app.add_middleware(
 
 # single endpoint to transcribe, analyze mood, and upload to firestore
 @app.post("/v1/process_audio/")
-async def process_audio(file: UploadFile = File(...)):
+async def process_audio(file: Annotated[UploadFile, File(...)]):
     # Transcription step
     # file check
     if file.content_type != "audio/webm":
