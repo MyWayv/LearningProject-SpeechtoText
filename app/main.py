@@ -43,8 +43,8 @@ app.add_middleware(
 
 # single endpoint to transcribe, analyze mood, and upload to firestore
 @app.post("/v1/process_audio/")
-async def process_audio(file: Annotated[UploadFile, File(...)]):
-    transcript = await transcriptionStep(file)
+async def batch_process_audio(file: Annotated[UploadFile, File(...)]):
+    transcript = await batchTranscriptionStep(file)
     mood = await moodAnalysisStep(transcript)
     uploadResult = await uploadToFirestoreStep(transcript, mood)
     return uploadResult
@@ -67,7 +67,7 @@ if static_dir.exists():
     app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 
-async def transcriptionStep(file: UploadFile) -> Transcript:
+async def batchTranscriptionStep(file: UploadFile) -> Transcript:
     # Transcription step
     # file check
     if file.content_type != "audio/webm":
