@@ -44,6 +44,30 @@ app.add_middleware(
 # single endpoint to transcribe, analyze mood, and upload to firestore
 @app.post("/v1/process_audio/")
 async def process_audio(file: Annotated[UploadFile, File(...)]):
+    transcript = await transcriptionStep(file)
+    mood = await moodAnalysisStep(transcript)
+    uploadResult = await uploadToFirestoreStep(transcript, mood)
+    return uploadResult
+
+
+# get all from firestore endpoint
+@app.get("/v1/firestore_get/")
+async def get_from_firestore():
+    rows = db.collection("record").stream()
+    records = []
+    for row in rows:
+        records.append(row.to_dict())
+    return records
+
+
+# Mount static files
+# https://fastapi.tiangolo.com/tutorial/static-files/
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+
+
+async def transcriptionStep(file: UploadFile) -> Transcript:
     # Transcription step
     # file check
     if file.content_type != "audio/webm":
@@ -82,7 +106,10 @@ async def process_audio(file: Annotated[UploadFile, File(...)]):
         confidence=response.results[0].alternatives[0].confidence,
     )
     print(f"Transcript step done: {transcript}")
+    return transcript
 
+
+async def moodAnalysisStep(transcript: Transcript) -> Mood:
     # Mood analysis step
     if not transcript.text:
         raise HTTPException(status_code=400, detail="Transcript text is empty.")
@@ -106,7 +133,10 @@ async def process_audio(file: Annotated[UploadFile, File(...)]):
 
     mood = Mood.model_validate_json(response.text)
     print(f"Mood analysis step done: {mood}")
+    return mood
 
+
+async def uploadToFirestoreStep(transcript: Transcript, mood: Mood):
     # Upload to Firestore step
     if not transcript or not mood:
         raise HTTPException(status_code=400, detail="No response data provided.")
@@ -131,20 +161,3 @@ async def process_audio(file: Annotated[UploadFile, File(...)]):
         raise HTTPException(status_code=400, detail="Failed to upload to Firestore.")
 
     return {"status": 200, "uid": transcript.uid}
-
-
-# get all from firestore endpoint
-@app.get("/v1/firestore_get/")
-async def get_from_firestore():
-    rows = db.collection("record").stream()
-    records = []
-    for row in rows:
-        records.append(row.to_dict())
-    return records
-
-
-# Mount static files
-# https://fastapi.tiangolo.com/tutorial/static-files/
-static_dir = Path(__file__).parent / "static"
-if static_dir.exists():
-    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
