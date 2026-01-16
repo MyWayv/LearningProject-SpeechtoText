@@ -71,3 +71,11 @@ h1 {
   text-align: left;
   background: white;
 }
+
+.final {
+  color: black;
+}
+
+.incoming {
+  color: grey;
+}

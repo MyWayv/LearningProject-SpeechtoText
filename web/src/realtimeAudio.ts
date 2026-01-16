@@ -1,7 +1,8 @@
 export default class RealtimeAudio {
   private container: HTMLElement;
   private realtimeAudioElement: HTMLElement;
-  private fullTranscript: string = "";
+  private final: string = "";
+  private incoming: string = "";
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -10,23 +11,41 @@ export default class RealtimeAudio {
     this.container.appendChild(this.realtimeAudioElement);
   }
 
-  public update(newTranscript: string): void {
+  public update(newTranscript: string, isFinal: boolean): void {
     this.realtimeAudioElement.innerHTML = "";
 
-    if (this.fullTranscript.length == 0) {
-      this.fullTranscript = newTranscript;
+    if (isFinal) {
+      this.final += newTranscript + ". ";
+      this.incoming = "";
     } else {
-      this.fullTranscript += ". " + newTranscript;
+      this.incoming = this.merge(this.incoming, newTranscript);
     }
 
     this.realtimeAudioElement.innerHTML = `<div class="realtime-transcript">
                                             Realtime Transcript: 
-                                            ${this.fullTranscript}
+                                            <span class="final"> ${this.final} </span>
+                                            <span class="incoming">${this.incoming}</span> 
                                             </div>`;
   }
 
   public clear(): void {
-    this.fullTranscript = "";
+    this.final = "";
+    this.incoming = "";
     this.realtimeAudioElement.innerHTML = "";
+  }
+
+  public merge(oldText: string, newText: string): string {
+    oldText = oldText.trim();
+    newText = newText.trim();
+
+    if (oldText === "") {
+      return newText;
+    }
+
+    if (newText === "") {
+      return oldText;
+    }
+
+    return "hello there";
   }
 }

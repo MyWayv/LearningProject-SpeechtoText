@@ -76,7 +76,7 @@ export default class Recorder {
       console.log("WebSocket message received:", event.data);
       const data = JSON.parse(event.data);
       if (data.transcript) {
-        this.realtimeAudio?.update(data.transcript);
+        this.realtimeAudio?.update(data.transcript, data.is_final);
       }
     };
 
@@ -106,12 +106,12 @@ export default class Recorder {
 
         // on stop event handler
         this.mediaRecorder.onstop = async () => {
-          this.realtimeAudio?.clear();
           // retrieve from firestore
           this.records = [];
           try {
             this.records = await this.getFromFirestore();
             console.log("Retrieved records from Firestore:", this.records);
+            this.realtimeAudio?.clear();
             this.recordList?.update(this.records);
           } catch (err) {
             console.error("Failed to retrieve records from Firestore:", err);
