@@ -1,7 +1,16 @@
+import queue
+import threading
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from google import genai
@@ -41,10 +50,119 @@ app.add_middleware(
 )
 
 
-# single endpoint to transcribe, analyze mood, and upload to firestore
-@app.post("/v1/process_audio/")
-async def process_audio(file: Annotated[UploadFile, File(...)]):
-    transcript = await transcriptionStep(file)
+# websocket for streaming audio processing
+# https://docs.cloud.google.com/speech-to-text/docs/v1/transcribe-streaming-audio#speech-streaming-recognize-python
+# https://docs.python.org/3/library/threading.html
+# https://fastapi.tiangolo.com/advanced/websockets/#create-a-websocket
+@app.websocket("/v1/ws/stream_process_audio/")
+async def websocket_stream_process_audio(websocket: WebSocket):
+    # configure google stt streaming
+    config = speech.RecognitionConfig(
+        encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
+        sample_rate_hertz=48000,
+        language_code="en-US",
+        enable_word_time_offsets=True,
+    )
+    streaming_config = speech.StreamingRecognitionConfig(
+        config=config, interim_results=True
+    )
+
+    # queues for audio and results
+    audio_queue = queue.Queue()
+    res_queue = queue.Queue()
+    final_results_queue = queue.Queue()
+    stop = threading.Event()
+
+    # open connection
+    await websocket.accept()
+    print("WebSocket connection accepted")
+
+    # generator to yield audio chunks mimicking googles example
+    def generator():
+        while True:
+            chunk = audio_queue.get()
+            if chunk is None:
+                break
+            yield speech.StreamingRecognizeRequest(
+                audio_content=chunk
+            )  # yield audio chunks to google stt
+
+    def stt_thread():
+        if stop.is_set():
+            return
+
+        # call google stt
+        responses: speech.StreamingRecognizeResponse = (
+            speech_client.streaming_recognize(  # returns iterator
+                config=streaming_config, requests=generator()
+            )
+        )
+
+        # process responses
+        try:
+            for response in responses:  # iterator blocks thread if no response
+                for result in response.results:
+                    transcript_text = result.alternatives[0].transcript
+                    confidence = result.alternatives[0].confidence
+                    res_queue.put(
+                        {
+                            "transcript": transcript_text,
+                            "is_final": result.is_final,
+                            "confidence": confidence,
+                        }
+                    )
+        except Exception as e:
+            print("Error in STT thread:", e)
+
+    # run blocking thread for stt
+    threading.Thread(target=stt_thread, daemon=True).start()
+
+    try:
+        while True:
+            # receive audio data from websocket
+            data = await websocket.receive_bytes()
+
+            # put audio into q
+            audio_queue.put(data)
+
+            # read from results q
+            while not res_queue.empty():
+                res = res_queue.get()
+                if res["is_final"]:
+                    final_results_queue.put(res)
+                await websocket.send_json(res)
+    except WebSocketDisconnect as e:
+        print("websocket disconnected:", e)
+    except Exception as e:
+        print("error during websocket communication:", e)
+    finally:
+        stop.set()
+        audio_queue.put(None)
+        # get full transcript from results q
+        entries = final_results_queue.qsize()
+        full_transcript = ""
+        final_confidence = 0.0
+        while not final_results_queue.empty():
+            res = final_results_queue.get()
+            full_transcript += res["transcript"] + ". "
+            final_confidence += res["confidence"]
+        if entries > 0:
+            final_confidence /= entries
+        else:
+            final_confidence = 0.0
+        transcript = Transcript(
+            text=full_transcript,
+            confidence=final_confidence,
+        )
+        mood = await moodAnalysisStep(transcript)
+        uploadResult = await uploadToFirestoreStep(transcript, mood)
+    return uploadResult
+
+
+# single endpoint to batch transcribe, analyze mood, and upload to firestore
+@app.post("/v1/batch_process_audio/")
+async def batch_process_audio(file: Annotated[UploadFile, File(...)]):
+    transcript = await batchTranscriptionStep(file)
     mood = await moodAnalysisStep(transcript)
     uploadResult = await uploadToFirestoreStep(transcript, mood)
     return uploadResult
@@ -67,7 +185,7 @@ if static_dir.exists():
     app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 
-async def transcriptionStep(file: UploadFile) -> Transcript:
+async def batchTranscriptionStep(file: UploadFile) -> Transcript:
     # Transcription step
     # file check
     if file.content_type != "audio/webm":
