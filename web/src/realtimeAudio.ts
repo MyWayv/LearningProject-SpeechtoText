@@ -11,14 +11,18 @@ export default class RealtimeAudio {
     this.container.appendChild(this.realtimeAudioElement);
   }
 
-  public update(newTranscript: string, isFinal: boolean): void {
+  public update(
+    newTranscript: string,
+    isFinal: boolean = false,
+    stability: number = 0.0,
+  ): void {
     this.realtimeAudioElement.innerHTML = "";
 
     if (isFinal) {
-      this.final += newTranscript + ". ";
+      this.final += newTranscript + " ";
       this.incoming = "";
     } else {
-      this.incoming = this.merge(this.incoming, newTranscript);
+      this.incoming = this.merge(this.incoming, newTranscript, stability);
     }
 
     this.realtimeAudioElement.innerHTML = `<div class="realtime-transcript">
@@ -34,9 +38,14 @@ export default class RealtimeAudio {
     this.realtimeAudioElement.innerHTML = "";
   }
 
-  public merge(oldText: string, newText: string): string {
+  public merge(oldText: string, newText: string, stability: number): string {
     oldText = oldText.trim();
     newText = newText.trim();
+
+    if (stability < 0.3) {
+      // subject to change in next message, might be wrong word
+      return oldText;
+    }
 
     if (oldText === "") {
       return newText;

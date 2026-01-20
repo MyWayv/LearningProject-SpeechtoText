@@ -1,6 +1,5 @@
 import queue
 import threading
-from http import client
 from pathlib import Path
 from typing import Annotated
 
@@ -64,10 +63,13 @@ async def websocket_stream_process_audio(websocket: WebSocket):
     config = cloud_speech.RecognitionConfig(
         auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
         language_codes=["en-US"],
-        model="chirp_3",
+        model="long",  # chirp3 doesnt support interim results
     )
     streaming_config = cloud_speech.StreamingRecognitionConfig(
         config=config,
+        streaming_features=cloud_speech.StreamingRecognitionFeatures(
+            interim_results=True
+        ),
     )
 
     config_request = cloud_speech.StreamingRecognizeRequest(
@@ -110,13 +112,13 @@ async def websocket_stream_process_audio(websocket: WebSocket):
         try:
             for response in responses:  # iterator blocks thread if no response
                 for result in response.results:
+                    print("STT Result received:", result)
                     transcript_text = result.alternatives[0].transcript
-                    confidence = result.alternatives[0].confidence
                     res_queue.put(
                         {
                             "transcript": transcript_text,
                             "is_final": result.is_final,
-                            "confidence": confidence,
+                            "stability": result.stability,
                         }
                     )
         except Exception as e:
@@ -150,21 +152,13 @@ async def websocket_stream_process_audio(websocket: WebSocket):
         stop.set()
         audio_queue.put(None)
         # get full transcript from results q
-        entries = final_results_queue.qsize()
         full_transcript = ""
-        final_confidence = 0.0
         while not final_results_queue.empty():
             res = final_results_queue.get()
             full_transcript += res["transcript"]
-            final_confidence += res["confidence"]
-        if entries > 0:
-            final_confidence /= entries
-        else:
-            final_confidence = 0.0
 
         transcript = Transcript(
             text=full_transcript,
-            confidence=final_confidence,
         )
         mood = await moodAnalysisStep(transcript)
         uploadResult = await uploadToFirestoreStep(transcript, mood)
@@ -231,7 +225,6 @@ async def batchTranscriptionStep(file: UploadFile) -> Transcript:
     # transcript in pydantic model
     transcript = Transcript(
         text=response.results[0].alternatives[0].transcript,
-        confidence=response.results[0].alternatives[0].confidence,
     )
     print(f"Transcript step done: {transcript}")
     return transcript
@@ -244,8 +237,7 @@ async def moodAnalysisStep(transcript: Transcript) -> Mood:
 
     propmt = "Analyze the following transcript and determine the overall mood of the user. Give a confidence score between 0.0 and 1.0 and evidence with explanations."
 
-    # remove confidence to force gemini to gen one
-    transcript_data = transcript.model_dump(exclude={"confidence"})
+    transcript_data = transcript.model_dump()
 
     response = gemini_client.models.generate_content(
         model="gemini-2.5-flash",
@@ -280,7 +272,6 @@ async def uploadToFirestoreStep(transcript: Transcript, mood: Mood):
                 "mood": mood.mood,
             },
             "transcript": transcript.text,
-            "transcript_confidence": transcript.confidence,
             "uid": transcript.uid,
         }
     )

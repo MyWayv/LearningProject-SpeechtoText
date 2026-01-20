@@ -81,7 +81,11 @@ export default class Recorder {
       console.log("WebSocket message received:", event.data);
       const data = JSON.parse(event.data);
       if (data.transcript) {
-        this.realtimeAudio?.update(data.transcript, data.is_final);
+        this.realtimeAudio?.update(
+          data.transcript,
+          data.is_final,
+          data.stability,
+        );
       }
     };
 
