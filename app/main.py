@@ -86,7 +86,10 @@ async def websocket_stream_process_audio(websocket: WebSocket):
     )
 
     # queues for audio and results
-    audio_queue = queue.Queue()
+    audio_queue = (
+        queue.Queue()
+    )  # audio chunks from websocket, get consumed by stt thread
+    bucket_audio_queue = queue.Queue()  # full audio chunks for upload later
     res_queue = queue.Queue()
     final_results_queue = queue.Queue()
     stop = threading.Event()
@@ -108,6 +111,7 @@ async def websocket_stream_process_audio(websocket: WebSocket):
                         print("Restarting STT stream due to time limit\n\n\n\n\n\n\n")
                         break
                     chunk = audio_queue.get()
+                    bucket_audio_queue.put(chunk)  # save for upload later
                     if chunk is None:
                         break
                     yield cloud_speech.StreamingRecognizeRequest(
@@ -175,6 +179,7 @@ async def websocket_stream_process_audio(websocket: WebSocket):
             text=full_transcript,
         )
         mood = await moodAnalysisStep(transcript)
+        # TODO bucket_audio_queue to mp3(?) and upload to bucket later
         uploadResult = await uploadToFirestoreStep(transcript, mood)
     return uploadResult
 
@@ -182,8 +187,9 @@ async def websocket_stream_process_audio(websocket: WebSocket):
 # single endpoint to batch transcribe, analyze mood, and upload to firestore
 @app.post("/v1/batch_process_audio/")
 async def batch_process_audio(file: Annotated[UploadFile, File(...)]):
-    transcript = await batchTranscriptionStep(file)
+    transcript, data = await batchTranscriptionStep(file)
     mood = await moodAnalysisStep(transcript)
+    # TODO upload data to bucket here l8r
     uploadResult = await uploadToFirestoreStep(transcript, mood)
     return uploadResult
 
@@ -205,7 +211,7 @@ if static_dir.exists():
     app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 
-async def batchTranscriptionStep(file: UploadFile) -> Transcript:
+async def batchTranscriptionStep(file: UploadFile) -> tuple[Transcript, bytes]:
     # Transcription step
     # file check
     if file.filename is None or file.filename == "":
@@ -214,6 +220,7 @@ async def batchTranscriptionStep(file: UploadFile) -> Transcript:
     if file.size is None or file.size == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
 
+    # raw audio bytes in data for mp3(?) conversion later and saving to bucket
     data = await file.read()
 
     config = cloud_speech.RecognitionConfig(
@@ -240,7 +247,7 @@ async def batchTranscriptionStep(file: UploadFile) -> Transcript:
         text=response.results[0].alternatives[0].transcript,
     )
     print(f"Transcript step done: {transcript}")
-    return transcript
+    return transcript, data
 
 
 async def moodAnalysisStep(transcript: Transcript) -> Mood:
