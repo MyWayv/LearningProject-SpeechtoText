@@ -1,4 +1,4 @@
-import { TranscriptionMode } from "./types";
+import type { TranscriptionMode } from "./types";
 import BatchService from "../services/batchService";
 import StreamingService from "../services/streamingService";
 
@@ -7,11 +7,11 @@ export default class AudioRecorder {
   private audioContext: AudioContext = new AudioContext();
   private source: MediaStreamAudioSourceNode | null = null;
   private stream: MediaStream | null = null;
-  private pcmData: Float32Array[] = [];
   private lin16buffer: Int16Array = new Int16Array();
   private batchService: BatchService;
   private streamingService: StreamingService;
   private transcriptionMode: TranscriptionMode = "stream";
+  private onProcessingComplete?: () => void;
 
   constructor(
     onTranscriptUpdate?: (
@@ -19,9 +19,14 @@ export default class AudioRecorder {
       isFinal: boolean,
       stability: number,
     ) => void,
+    onProcessingComplete?: () => void,
   ) {
+    this.onProcessingComplete = onProcessingComplete;
     this.batchService = new BatchService();
-    this.streamingService = new StreamingService(onTranscriptUpdate);
+    this.streamingService = new StreamingService(
+      onTranscriptUpdate,
+      onProcessingComplete,
+    );
   }
 
   public getRecordingStatus(): boolean {
@@ -68,16 +73,12 @@ export default class AudioRecorder {
     this.source = this.audioContext.createMediaStreamSource(this.stream);
 
     // add recorder worklet custom node
-    await this.audioContext.audioWorklet.addModule("recorderNode.js");
+    await this.audioContext.audioWorklet.addModule("/recorderNode.js");
     const recorderNode = new AudioWorkletNode(
       this.audioContext,
       "recorder-node",
     );
     this.source.connect(recorderNode);
-
-    // initialize buffers
-    this.pcmData = [];
-    this.lin16buffer = new Int16Array();
 
     // connect to streaming service
     this.streamingService.connect();
@@ -103,9 +104,6 @@ export default class AudioRecorder {
     setTimeout(() => {
       this.streamingService.disconnect();
     }, 5000);
-
-    this.lin16buffer = new Int16Array();
-    this.pcmData = [];
   }
 
   private async startBatchRecording(): Promise<void> {
@@ -122,21 +120,19 @@ export default class AudioRecorder {
     this.source = this.audioContext.createMediaStreamSource(this.stream);
 
     // add recorder worklet custom node
-    await this.audioContext.audioWorklet.addModule("recorderNode.js");
+    await this.audioContext.audioWorklet.addModule("/recorderNode.js");
     const recorderNode = new AudioWorkletNode(
       this.audioContext,
       "recorder-node",
     );
     this.source.connect(recorderNode);
 
-    // initialize buffers
-    this.pcmData = [];
+    // initialize buffer
     this.lin16buffer = new Int16Array();
 
     // handle incoming audio data from worklet
     recorderNode.port.onmessage = (event) => {
       const workletInput = event.data[0];
-      this.pcmData.push(workletInput);
       this.lin16buffer = new Int16Array([
         ...this.lin16buffer,
         ...this.linear16PCM(workletInput),
@@ -150,22 +146,14 @@ export default class AudioRecorder {
     this.stream!.getTracks().forEach((track) => track.stop());
     this.audioContext.close();
 
-    // combine pcmChunks into a single Float32Array
-    const totalLength = this.pcmData.reduce(
-      (acc, chunk) => acc + chunk.length,
-      0,
-    );
-    const pcmData = new Float32Array(totalLength);
-    let offset = 0;
-    for (const chunk of this.pcmData) {
-      pcmData.set(chunk, offset);
-      offset += chunk.length;
-    }
-
     // call batchService with lin16buffer
     await this.batchService.processBatchAudio(this.lin16buffer);
+
+    if (this.onProcessingComplete) {
+      this.onProcessingComplete();
+    }
+
     this.lin16buffer = new Int16Array();
-    this.pcmData = [];
   }
 
   // convert float32 to linear16

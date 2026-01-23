@@ -19,6 +19,8 @@ export default class BatchService {
         const text = await res.text();
         throw new Error(`Processing audio failed: ${text}`);
       }
+
+      await res.json();
     } catch (err) {
       console.error("Error processing audio:", err);
       return;

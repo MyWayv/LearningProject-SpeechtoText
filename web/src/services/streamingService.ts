@@ -5,6 +5,7 @@ export default class StreamingService {
     isFinal: boolean,
     stability: number,
   ) => void;
+  private onProcessingComplete?: () => void;
 
   constructor(
     onTranscriptUpdate?: (
@@ -12,8 +13,10 @@ export default class StreamingService {
       isFinal: boolean,
       stability: number,
     ) => void,
+    onProcessingComplete?: () => void,
   ) {
     this.onTranscriptUpdate = onTranscriptUpdate;
+    this.onProcessingComplete = onProcessingComplete;
   }
 
   public connect(): void {
@@ -21,20 +24,15 @@ export default class StreamingService {
       "ws://localhost:8000/v1/ws/stream_process_audio/",
     );
 
-    this.websocket.onopen = () => {
-      console.log("Websocket open");
-    };
-
-    this.websocket.onerror = (error) => {
-      console.error("WebSocket error:", error);
-    };
-
-    this.websocket.onclose = (event) => {
-      console.log("WebSocket connection closed:", event);
+    this.websocket.onclose = () => {
+      if (this.onProcessingComplete) {
+        this.onProcessingComplete();
+      }
     };
 
     this.websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
+
       if (this.onTranscriptUpdate && data.transcript) {
         this.onTranscriptUpdate(
           data.transcript,

@@ -1,4 +1,4 @@
-import firestoreRecord from "../audio/types";
+import type firestoreRecord from "../audio/types";
 
 export default class TranscriptionList {
   private container: HTMLElement;
@@ -13,6 +13,7 @@ export default class TranscriptionList {
 
   // update the list with new transcriptions
   public update(transcriptions: firestoreRecord[]): void {
+    this.listElement.style.display = "block";
     this.listElement.innerHTML = "";
 
     if (transcriptions.length === 0) {
@@ -48,5 +49,13 @@ export default class TranscriptionList {
 
   public clear(): void {
     this.listElement.innerHTML = "";
+  }
+
+  public hide(): void {
+    this.listElement.style.display = "none";
+  }
+
+  public show(): void {
+    this.listElement.style.display = "block";
   }
 }

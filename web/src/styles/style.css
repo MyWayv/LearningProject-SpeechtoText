@@ -27,16 +27,7 @@ h1 {
   padding: 2rem;
 }
 
-#transcription-mode-toggle-container {
-}
-
-#realtime-transcript-container {
-}
-
-#transcription-list-container {
-}
-
-.recorder-button {
+.record-button {
   width: 80px;
   height: 80px;
   border-radius: 50%;
@@ -47,12 +38,12 @@ h1 {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.recorder-button:hover {
+.record-button:hover {
   transform: scale(1.05);
   box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
 }
 
-.recorder-button.active {
+.record-button.active {
   background: #ff0000;
 }
 
@@ -69,7 +60,7 @@ h1 {
   text-align: left;
 }
 
-.record-realtime-transcript {
+.realtime-transcript {
   margin-top: 0.5rem;
   font-weight: bold;
   color: #111827;

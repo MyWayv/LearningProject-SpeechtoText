@@ -7,7 +7,8 @@ export default class RealtimeTranscript {
   constructor(container: HTMLElement) {
     this.container = container;
     this.realtimeTranscriptElement = document.createElement("div");
-    this.realtimeTranscriptElement.className = "record-realtime-transcript";
+    this.realtimeTranscriptElement.className = "realtime-transcript";
+    this.realtimeTranscriptElement.style.display = "none";
     this.container.appendChild(this.realtimeTranscriptElement);
   }
 
@@ -16,6 +17,7 @@ export default class RealtimeTranscript {
     isFinal: boolean = false,
     stability: number = 0.0,
   ): void {
+    this.realtimeTranscriptElement.style.display = "block";
     this.realtimeTranscriptElement.innerHTML = "";
 
     if (isFinal) {
@@ -37,6 +39,7 @@ export default class RealtimeTranscript {
     this.final = "";
     this.incoming = "";
     this.realtimeTranscriptElement.innerHTML = "";
+    this.realtimeTranscriptElement.style.display = "none";
   }
 
   public merge(oldText: string, newText: string, stability: number): string {
