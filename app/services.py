@@ -3,6 +3,7 @@ import subprocess
 import wave
 
 import numpy as np
+import pyflac
 from fastapi import (
     HTTPException,
     UploadFile,
@@ -152,19 +153,43 @@ def wavToMp3(wav_bytes: bytes) -> bytes:
     return mp3_bytes
 
 
+# convert LINEAR16 audio to FLAC
+# https://pyflac.readthedocs.io/en/latest/#encoder
+def lin16ToFlac(audio_bytes: bytes) -> bytes:
+    flac_chunks = []
+
+    def write_callback(
+        buffer: bytes, num_bytes: int, num_samples: int, current_frame: int
+    ):
+        flac_chunks.append(buffer)
+
+    encoder = pyflac.StreamEncoder(
+        sample_rate=16000,
+        write_callback=write_callback,
+        compression_level=5,
+    )
+
+    audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
+    encoder.process(audio_array)
+    encoder.finish()
+
+    return b"".join(flac_chunks)
+
+
 # Upload audio file to bucket
 async def uploadToBucketStep(audio_bytes: bytes, filename: str) -> str:
     if not audio_bytes or not filename:
         raise HTTPException(status_code=400, detail="No audio data provided.")
 
-    wav_bytes = lin16ToWav(audio_bytes)
-    mp3_bytes = wavToMp3(wav_bytes)
+    # wav_bytes = lin16ToWav(audio_bytes)
+    # mp3_bytes = wavToMp3(wav_bytes)
+    flac_bytes = lin16ToFlac(audio_bytes)
     bucket = get_storage_client().bucket("speech_wayv_bucket")
 
-    blob = bucket.blob(f"audio/{filename}.mp3")
+    blob = bucket.blob(f"audio/{filename}.flac")
     try:
-        blob.upload_from_string(mp3_bytes, content_type="audio/mp3")
+        blob.upload_from_string(flac_bytes, content_type="audio/flac")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to upload to Bucket: {e}")
 
-    return f"gs://speech_wayv_bucket/audio/{filename}.mp3"
+    return f"gs://speech_wayv_bucket/audio/{filename}.flac"
