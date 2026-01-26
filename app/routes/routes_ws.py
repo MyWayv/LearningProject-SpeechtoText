@@ -13,6 +13,7 @@ from app.deps import get_speech_v2_client
 from app.models import Transcript
 from app.services import (
     moodAnalysisStep,
+    uploadToBucketStep,
     uploadToFirestoreStep,
 )
 from app.speech_config import get_streaming_config_request
@@ -36,9 +37,9 @@ async def websocket_stream_process_audio(websocket: WebSocket):
                     ):  # 4 min limit, then restart stream recognize
                         break
                     chunk = audio_queue.get()
-                    bucket_audio_queue.put(chunk)  # save audio chunk for upload later
                     if chunk is None:
                         break
+                    bucket_audio_queue.put(chunk)  # save audio chunk for upload later
                     yield cloud_speech.StreamingRecognizeRequest(
                         audio=chunk
                     )  # yield audio chunks to google stt
@@ -114,5 +115,10 @@ async def websocket_stream_process_audio(websocket: WebSocket):
             text=full_transcript,
         )
         mood = await moodAnalysisStep(transcript)
-        uploadResult = await uploadToFirestoreStep(transcript, mood)
-    return uploadResult
+        res = await uploadToFirestoreStep(transcript, mood)
+        if res["uid"]:
+            audioBytes = bytearray()
+            while not bucket_audio_queue.empty():
+                audioBytes += bucket_audio_queue.get()
+            await uploadToBucketStep(audioBytes, res["uid"])
+    return res

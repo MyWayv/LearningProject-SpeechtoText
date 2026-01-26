@@ -1,6 +1,6 @@
 from google import genai
 from google.auth import default
-from google.cloud import firestore
+from google.cloud import firestore, storage
 from google.cloud.speech_v2 import SpeechClient
 
 # Clients startup and config
@@ -18,6 +18,8 @@ speech_v2_client = SpeechClient(
 
 firestore_client = firestore.Client()
 
+storage_client = storage.Client()
+
 
 # Export all clients
 def get_gemini_client():
@@ -34,3 +36,7 @@ def get_firestore_client():
 
 def get_project_id():
     return project
+
+
+def get_storage_client():
+    return storage_client

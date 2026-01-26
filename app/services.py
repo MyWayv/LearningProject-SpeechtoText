@@ -1,3 +1,7 @@
+import io
+import wave
+
+import numpy as np
 from fastapi import (
     HTTPException,
     UploadFile,
@@ -13,6 +17,7 @@ from .deps import (
     get_gemini_client,
     get_project_id,
     get_speech_v2_client,
+    get_storage_client,
 )
 
 
@@ -105,3 +110,31 @@ async def uploadToFirestoreStep(transcript: Transcript, mood: Mood):
 
     # print(f"Upload to Firestore step done: {transcript.uid}")
     return {"status": 200, "uid": transcript.uid}
+
+
+# convert LINEAR16 audio to WAV
+def lin16ToWav(audio_bytes: bytes) -> bytes:
+    audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
+
+    byte_io = io.BytesIO()
+    with wave.open(byte_io, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(16000)
+        wav_file.writeframes(audio_array.tobytes())
+
+    return byte_io.getvalue()
+
+
+# Upload audio file to bucket
+async def uploadToBucketStep(audio_bytes: bytes, filename: str) -> str:
+    if not audio_bytes or not filename:
+        raise HTTPException(status_code=400, detail="No audio data provided.")
+
+    wav_bytes = lin16ToWav(audio_bytes)
+    bucket = get_storage_client().bucket("speech_wayv_bucket")
+
+    blob = bucket.blob(f"audio/{filename}.wav")
+    blob.upload_from_string(wav_bytes, content_type="audio/wav")
+
+    return f"gs://speech_wayv_bucket/audio/{filename}.wav"
