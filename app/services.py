@@ -1,4 +1,5 @@
 import io
+import subprocess
 import wave
 
 import numpy as np
@@ -130,18 +131,40 @@ def lin16ToWav(audio_bytes: bytes) -> bytes:
     return byte_io.getvalue()
 
 
+# convert WAV to MP3
+# https://www.geeksforgeeks.org/python/convert-mp3-to-wav-using-python/
+def wavToMp3(wav_bytes: bytes) -> bytes:
+    mp3_bytes, _ = subprocess.Popen(
+        [
+            "ffmpeg",
+            "-i",
+            "pipe:0",
+            "-b:a",
+            "192K",
+            "-f",
+            "mp3",
+            "pipe:1",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).communicate(input=wav_bytes)
+    return mp3_bytes
+
+
 # Upload audio file to bucket
 async def uploadToBucketStep(audio_bytes: bytes, filename: str) -> str:
     if not audio_bytes or not filename:
         raise HTTPException(status_code=400, detail="No audio data provided.")
 
     wav_bytes = lin16ToWav(audio_bytes)
+    mp3_bytes = wavToMp3(wav_bytes)
     bucket = get_storage_client().bucket("speech_wayv_bucket")
 
-    blob = bucket.blob(f"audio/{filename}.wav")
+    blob = bucket.blob(f"audio/{filename}.mp3")
     try:
-        blob.upload_from_string(wav_bytes, content_type="audio/wav")
+        blob.upload_from_string(mp3_bytes, content_type="audio/mp3")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to upload to Bucket: {e}")
 
-    return f"gs://speech_wayv_bucket/audio/{filename}.wav"
+    return f"gs://speech_wayv_bucket/audio/{filename}.mp3"

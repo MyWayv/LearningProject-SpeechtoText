@@ -25,7 +25,7 @@ st_config = cloud_speech.RecognitionConfig(
     language_codes=["en-US"],
     model="long",  # chirp3 doesnt support interim results
     features=cloud_speech.RecognitionFeatures(
-        enable_automatic_punctuation=False,
+        enable_automatic_punctuation=False,  # disabled for UI
     ),
 )
 streaming_config = cloud_speech.StreamingRecognitionConfig(
