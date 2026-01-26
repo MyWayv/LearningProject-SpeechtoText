@@ -10,6 +10,7 @@ from app.services import (
     batchTranscriptionStep,
     get_from_firestore,
     moodAnalysisStep,
+    uploadToBucketStep,
     uploadToFirestoreStep,
 )
 
@@ -21,8 +22,10 @@ router = APIRouter(tags=["http"])
 async def batch_process_audio(file: Annotated[UploadFile, File(...)]):
     transcript, data = await batchTranscriptionStep(file)
     mood = await moodAnalysisStep(transcript)
-    uploadResult = await uploadToFirestoreStep(transcript, mood)
-    return uploadResult
+    res = await uploadToFirestoreStep(transcript, mood)
+    if res["uid"]:
+        await uploadToBucketStep(data, res["uid"])
+    return res
 
 
 # GET records from firestore endpoint
