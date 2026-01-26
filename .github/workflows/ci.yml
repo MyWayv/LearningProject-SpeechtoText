@@ -54,17 +54,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: build frontend
-        run: |
-          cd web
-          npm ci
-          npm run build
-
-      - name: Copy frontend build to FastAPI static folder
-        run: |
-          rm -rf app/static
-          cp -r web/dist app/static
-
       - name: authenticate to gcloud
         uses: google-github-actions/auth@v2
         with:
