@@ -1,5 +1,8 @@
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -17,14 +20,14 @@ h1 {
   margin-bottom: 2rem;
 }
 
-#recorder-container {
+#record-button-container {
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 2rem;
 }
 
-.recorder-button {
+.record-button {
   width: 80px;
   height: 80px;
   border-radius: 50%;
@@ -35,32 +38,26 @@ h1 {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.recorder-button:hover {
+.record-button:hover {
   transform: scale(1.05);
   box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
 }
 
-.recorder-button.active {
+.record-button.active {
   background: #ff0000;
 }
 
-.record-list {
+.transcription-list {
   max-width: 600px;
   margin: 2rem;
   padding: 0 1rem;
 }
 
-.record-item {
+.transcription-item {
   background: white;
   padding: 1rem;
   margin-bottom: 1rem;
   text-align: left;
-}
-
-.record-realtime-audio {
-  margin-top: 1rem;
-  font-style: italic;
-  color: #4b5563;
 }
 
 .realtime-transcript {

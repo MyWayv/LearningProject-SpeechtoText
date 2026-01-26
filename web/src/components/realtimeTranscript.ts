@@ -1,14 +1,15 @@
-export default class RealtimeAudio {
+export default class RealtimeTranscript {
   private container: HTMLElement;
-  private realtimeAudioElement: HTMLElement;
+  private realtimeTranscriptElement: HTMLElement;
   private final: string = "";
   private incoming: string = "";
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.realtimeAudioElement = document.createElement("div");
-    this.realtimeAudioElement.className = "record-realtime-audio";
-    this.container.appendChild(this.realtimeAudioElement);
+    this.realtimeTranscriptElement = document.createElement("div");
+    this.realtimeTranscriptElement.className = "realtime-transcript";
+    this.realtimeTranscriptElement.style.display = "none";
+    this.container.appendChild(this.realtimeTranscriptElement);
   }
 
   public update(
@@ -16,7 +17,8 @@ export default class RealtimeAudio {
     isFinal: boolean = false,
     stability: number = 0.0,
   ): void {
-    this.realtimeAudioElement.innerHTML = "";
+    this.realtimeTranscriptElement.style.display = "block";
+    this.realtimeTranscriptElement.innerHTML = "";
 
     if (isFinal) {
       this.final += newTranscript + ". ";
@@ -25,17 +27,19 @@ export default class RealtimeAudio {
       this.incoming = this.merge(this.incoming, newTranscript, stability);
     }
 
-    this.realtimeAudioElement.innerHTML = `<div class="realtime-transcript">
-                                            Realtime Transcript: 
-                                            <span class="final"> ${this.final} </span>
-                                            <span class="incoming">${this.incoming}</span> 
-                                          </div>`;
+    this.realtimeTranscriptElement.innerHTML = `
+        <div class="realtime-transcript">
+            Realtime Transcript: 
+            <span class="final"> ${this.final} </span>
+            <span class="incoming">${this.incoming}</span> 
+        </div>`;
   }
 
   public clear(): void {
     this.final = "";
     this.incoming = "";
-    this.realtimeAudioElement.innerHTML = "";
+    this.realtimeTranscriptElement.innerHTML = "";
+    this.realtimeTranscriptElement.style.display = "none";
   }
 
   public merge(oldText: string, newText: string, stability: number): string {
