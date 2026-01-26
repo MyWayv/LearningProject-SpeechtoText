@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   # test Job
-  test:
+  run-tests:
     runs-on: ubuntu-latest
 
     steps:
@@ -34,7 +34,7 @@ jobs:
           pytest
 
   # build frontend job
-  front:
+  build-frontend:
     runs-on: ubuntu-latest
 
     steps:
@@ -52,7 +52,7 @@ jobs:
 
   # build and push docker image to Google Artifact Registry
   google-artifact-registry:
-    needs: [test, front]
+    needs: [run-tests, build-frontend]
 
     runs-on: ubuntu-latest
 
