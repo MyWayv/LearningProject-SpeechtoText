@@ -39,7 +39,7 @@ async def websocket_stream_process_audio(websocket: WebSocket):
                     chunk = audio_queue.get()
                     if chunk is None:
                         break
-                    bucket_audio_queue.put(chunk)  # save audio chunk for upload later
+                    audioBytes.extend(chunk)
                     yield cloud_speech.StreamingRecognizeRequest(
                         audio=chunk
                     )  # yield audio chunks to google stt
@@ -71,7 +71,7 @@ async def websocket_stream_process_audio(websocket: WebSocket):
     audio_queue = (
         queue.Queue()
     )  # audio chunks from websocket, get consumed by stt thread
-    bucket_audio_queue = queue.Queue()  # full audio chunks for upload later
+    audioBytes = bytearray()
     res_queue = queue.Queue()  # send stt results from stt thread to main thread
     stop = threading.Event()
     full_transcript = ""
@@ -117,8 +117,5 @@ async def websocket_stream_process_audio(websocket: WebSocket):
         mood = await moodAnalysisStep(transcript)
         res = await uploadToFirestoreStep(transcript, mood)
         if res["uid"]:
-            audioBytes = bytearray()
-            while not bucket_audio_queue.empty():
-                audioBytes += bucket_audio_queue.get()
             await uploadToBucketStep(audioBytes, res["uid"])
     return res
