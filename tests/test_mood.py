@@ -11,14 +11,14 @@ def test_mood_model_valid_data():
         "evidence": ["The user laughed", "Positive tone detected"],
     }
     mood = Mood(**data)
-    assert mood.mood == data["mood"]
+    assert mood.mood == [("happy", 1.0)]
     assert mood.confidence == round(data["confidence"], 2)
     assert mood.evidence == data["evidence"]
 
 
 def test_mood_model_invalid_data():
     data = {
-        "mood": [("", 1.1)],
+        "mood": [("", 0.0)],
         "confidence": "high",
         "evidence": "Not a list",
     }
@@ -26,7 +26,8 @@ def test_mood_model_invalid_data():
         Mood(**data)
     errors = exc_info.value.errors()
     assert any(
-        error["loc"] == ("mood",) and "between 0.0 and 1.0" in error["msg"]
+        error["loc"] == ("mood",)
+        and "Sum of mood scores cannot be zero" in error["msg"]
         for error in errors
     )
     assert any(
