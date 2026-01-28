@@ -1,6 +1,5 @@
-import queue
-import threading
 import time
+from multiprocessing import Event, Process, Queue
 
 from fastapi import (
     APIRouter,
@@ -21,66 +20,60 @@ from app.speech_config import get_streaming_config_request
 router = APIRouter(tags=["ws"])
 
 
+# STT process function to run separately
+def stt_process(audio_queue, res_queue, stop):
+    print("STT process started")
+    while not stop.is_set():
+        start = time.time()
+
+        # gRPC request generator
+        def requests():
+            yield get_streaming_config_request()
+            while not stop.is_set():
+                # 4 min limit, then restart stream recognize
+                if time.time() - start > 240:
+                    break
+                chunk = audio_queue.get()
+                if chunk is None:
+                    break
+                # yield audio chunks to google stt
+                yield cloud_speech.StreamingRecognizeRequest(audio=chunk)
+
+        # process responses
+        try:
+            # call gRPC stt, return iterator
+            responses = get_speech_v2_client().streaming_recognize(requests=requests())
+            for response in responses:  # iterator blocks thread if no response
+                for result in response.results:
+                    transcript_text = result.alternatives[0].transcript
+                    res_queue.put(
+                        {
+                            "transcript": transcript_text,
+                            "is_final": result.is_final,
+                            "stability": result.stability,
+                        }
+                    )
+        except Exception as e:
+            print("error in STT process:", e)
+
+
 # WebSocket for realtime audio transcription
 @router.websocket("/v1/ws/stream_process_audio/")
 async def websocket_stream_process_audio(websocket: WebSocket):
-    def stt_thread():
-        while not stop.is_set():
-            start = time.time()
-
-            # gRPC request generator
-            def requests():
-                yield get_streaming_config_request()
-                while not stop.is_set():
-                    if (
-                        time.time() - start > 240
-                    ):  # 4 min limit, then restart stream recognize
-                        break
-                    chunk = audio_queue.get()
-                    if chunk is None:
-                        break
-                    audioBytes.extend(chunk)
-                    yield cloud_speech.StreamingRecognizeRequest(
-                        audio=chunk
-                    )  # yield audio chunks to google stt
-
-            # call gRPC stt
-            responses: cloud_speech.StreamingRecognizeResponse = (
-                get_speech_v2_client().streaming_recognize(  # returns iterator
-                    requests=requests()
-                )
-            )
-
-            # process responses
-            try:
-                for response in responses:  # iterator blocks thread if no response
-                    for result in response.results:
-                        # print("STT Result received:\n", result)
-                        transcript_text = result.alternatives[0].transcript
-                        res_queue.put(
-                            {
-                                "transcript": transcript_text,
-                                "is_final": result.is_final,
-                                "stability": result.stability,
-                            }
-                        )
-            except Exception as e:
-                print("or in STT thread:", e)
-
     # queues for thread safe audio and results passing
-    audio_queue = (
-        queue.Queue()
-    )  # audio chunks from websocket, get consumed by stt thread
+    audio_queue = Queue()  # audio chunks from websocket, get consumed by stt thread
     audioBytes = bytearray()
-    res_queue = queue.Queue()  # send stt results from stt thread to main thread
-    stop = threading.Event()
+    res_queue = Queue()  # send stt results from stt thread to main thread
+    stop = Event()
     full_transcript = ""
 
-    # open connection
+    # initialization
     await websocket.accept()
 
-    # run blocking thread for stt
-    threading.Thread(target=stt_thread, daemon=True).start()
+    # start process, takes a little longer than thread
+    # https://www.python-engineer.com/courses/advancedpython/17-multiprocessing/
+    p1 = Process(target=stt_process, args=(audio_queue, res_queue, stop))
+    p1.start()
 
     try:
         while True:
@@ -92,15 +85,15 @@ async def websocket_stream_process_audio(websocket: WebSocket):
             for i in range(0, len(data), MAX_CHUNK_SIZE):
                 chunk = data[i : i + MAX_CHUNK_SIZE]
                 audio_queue.put(chunk)
+                audioBytes.extend(chunk)
 
             # read from results q
             while not res_queue.empty():
                 res = res_queue.get()
                 if res["is_final"]:
                     full_transcript += res["transcript"] + ". "
-                await websocket.send_json(
-                    res
-                )  # send result back to client for realtime display
+                # send result back to client for realtime display
+                await websocket.send_json(res)
     except WebSocketDisconnect as e:
         print("websocket disconnected:", e)
     except Exception as e:
@@ -109,6 +102,7 @@ async def websocket_stream_process_audio(websocket: WebSocket):
         # cleanup
         stop.set()
         audio_queue.put(None)
+        p1.join()
 
         # process final transcript
         transcript = Transcript(
