@@ -23,7 +23,6 @@ router = APIRouter(tags=["ws"])
 
 # STT process function to run separately
 def stt_process(audio_queue, res_queue, stop):
-    print("STT process started")
     while not stop.is_set():
         start = time.time()
 
