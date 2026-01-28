@@ -1,3 +1,4 @@
+import os
 import time
 from multiprocessing import Event, Process, Queue
 
@@ -22,7 +23,6 @@ router = APIRouter(tags=["ws"])
 
 # STT process function to run separately
 def stt_process(audio_queue, res_queue, stop):
-    print("STT process started")
     while not stop.is_set():
         start = time.time()
 
@@ -58,7 +58,7 @@ def stt_process(audio_queue, res_queue, stop):
 
 
 # WebSocket for realtime audio transcription
-@router.websocket("/v1/ws/stream_process_audio/")
+@router.websocket(os.getenv("STREAM_PROCESS_AUDIO_URL"))
 async def websocket_stream_process_audio(websocket: WebSocket):
     # queues for thread safe audio and results passing
     audio_queue = Queue()  # audio chunks from websocket, get consumed by stt thread

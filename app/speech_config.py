@@ -1,3 +1,5 @@
+import os
+
 from google.cloud.speech_v2.types import cloud_speech
 
 from app.deps import get_project_id
@@ -14,6 +16,16 @@ config = cloud_speech.RecognitionConfig(
     language_codes=["en-US"],
     model="chirp_3",
 )
+
+
+def get_batch_recognition_request(data) -> cloud_speech.RecognitionConfig:
+    request = cloud_speech.RecognizeRequest(
+        recognizer=f"projects/{get_project_id()}" + os.getenv("RECOGNIZER_NAME"),
+        config=config,
+        content=data,
+    )
+    return request
+
 
 # Recognition config for streaming transcription
 st_config = cloud_speech.RecognitionConfig(
@@ -35,13 +47,9 @@ streaming_config = cloud_speech.StreamingRecognitionConfig(
     ),
 )
 config_request = cloud_speech.StreamingRecognizeRequest(
-    recognizer=f"projects/{get_project_id()}/locations/us/recognizers/mood",
+    recognizer=f"projects/{get_project_id()}" + os.getenv("RECOGNIZER_NAME"),
     streaming_config=streaming_config,
 )
-
-
-def get_batch_recognition_config() -> cloud_speech.RecognitionConfig:
-    return config
 
 
 def get_streaming_config_request() -> cloud_speech.StreamingRecognizeRequest:
