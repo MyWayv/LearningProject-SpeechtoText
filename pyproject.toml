@@ -1,5 +1,6 @@
 [tool.ruff]
 lint.extend-select = ["PTH", "FAST"]
+lint.ignore = ["E402"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

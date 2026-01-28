@@ -8,3 +8,4 @@ env/
 .pytest_cache/
 static/
 .ruff_cache
+.env.local

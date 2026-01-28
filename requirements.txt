@@ -10,3 +10,4 @@ ruff
 websockets
 pydub
 audioop-lts
+dotenv

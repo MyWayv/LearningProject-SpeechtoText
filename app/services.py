@@ -1,23 +1,21 @@
 import io
+import os
 
 from fastapi import (
     HTTPException,
     UploadFile,
 )
 from google.cloud import firestore
-from google.cloud.speech_v2.types import cloud_speech
 from pydub import AudioSegment
 
-from app.models import Mood, Transcript
-from app.speech_config import get_batch_recognition_config
-
-from .deps import (
+from app.deps import (
     get_firestore_client,
     get_gemini_client,
-    get_project_id,
     get_speech_v2_client,
     get_storage_client,
 )
+from app.models import Mood, Transcript
+from app.speech_config import get_batch_recognition_request
 
 
 # Get all from firestore endpoint
@@ -40,11 +38,7 @@ async def batchTranscriptionStep(file: UploadFile) -> tuple[Transcript, bytes]:
     # raw audio bytes in data for mp3(?) conversion later and saving to bucket
     data = await file.read()
 
-    request = cloud_speech.RecognizeRequest(
-        recognizer=f"projects/{get_project_id()}/locations/us/recognizers/mood",
-        config=get_batch_recognition_config(),
-        content=data,
-    )
+    request = get_batch_recognition_request(data)
 
     # gRPC call
     response = get_speech_v2_client().recognize(request=request)
@@ -161,7 +155,7 @@ async def uploadToBucketStep(audio_bytes: bytes, filename: str) -> str:
     # wav_bytes = lin16ToWav(audio_bytes)
     # mp3_bytes = wavToMp3(wav_bytes)
     flac_bytes = lin16ToFlac(audio_bytes)
-    bucket = get_storage_client().bucket("speech_wayv_bucket")
+    bucket = get_storage_client().bucket(os.getenv("BUCKET_NAME"))
 
     blob_flac = bucket.blob(f"audio/{filename}.flac")
     # blob_mp3 = bucket.blob(f"audio/{filename}.mp3")
@@ -173,4 +167,4 @@ async def uploadToBucketStep(audio_bytes: bytes, filename: str) -> str:
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to upload to Bucket: {e}")
 
-    return f"gs://speech_wayv_bucket/audio/{filename}.flac"
+    return f"{os.getenv('BUCKET_URL')}{filename}.flac"
