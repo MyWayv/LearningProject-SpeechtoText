@@ -14,9 +14,9 @@ from google.cloud.speech_v2.types import cloud_speech
 from app.deps import get_speech_v2_client
 from app.models import Transcript
 from app.services import (
-    moodAnalysisStep,
-    uploadToBucketStep,
-    uploadToFirestoreStep,
+    mood_analysis_step,
+    upload_to_bucket_step,
+    upload_to_firestore_step,
 )
 from app.speech_config import get_streaming_config_request
 
@@ -114,8 +114,8 @@ async def websocket_stream_process_audio(websocket: WebSocket):
             text=full_transcript,
         )
 
-        mood = await moodAnalysisStep(transcript)
-        res = await uploadToFirestoreStep(transcript, mood)
+        mood = await mood_analysis_step(transcript)
+        res = await upload_to_firestore_step(transcript, mood)
         if res["uid"]:
-            await uploadToBucketStep(audioBytes, res["uid"])
+            await upload_to_bucket_step(audioBytes, res["uid"])
     return res

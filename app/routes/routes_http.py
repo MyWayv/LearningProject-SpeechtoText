@@ -8,11 +8,11 @@ from fastapi import (
 )
 
 from app.services import (
-    batchTranscriptionStep,
+    batch_transcription_step,
     get_from_firestore,
-    moodAnalysisStep,
-    uploadToBucketStep,
-    uploadToFirestoreStep,
+    mood_analysis_step,
+    upload_to_bucket_step,
+    upload_to_firestore_step,
 )
 
 router = APIRouter(tags=["http"])
@@ -21,11 +21,11 @@ router = APIRouter(tags=["http"])
 # POST batch audio processing endpoint
 @router.post(os.getenv("BATCH_PROCESS_AUDIO_URL"))
 async def batch_process_audio(file: Annotated[UploadFile, File(...)]):
-    transcript, data = await batchTranscriptionStep(file)
-    mood = await moodAnalysisStep(transcript)
-    res = await uploadToFirestoreStep(transcript, mood)
+    transcript, data = await batch_transcription_step(file)
+    mood = await mood_analysis_step(transcript)
+    res = await upload_to_firestore_step(transcript, mood)
     if res["uid"]:
-        await uploadToBucketStep(data, res["uid"])
+        await upload_to_bucket_step(data, res["uid"])
     return res
 
 

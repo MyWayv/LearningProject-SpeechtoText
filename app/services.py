@@ -28,7 +28,7 @@ async def get_from_firestore():
 
 
 # Send entire audio file for batch transcription
-async def batchTranscriptionStep(file: UploadFile) -> tuple[Transcript, bytes]:
+async def batch_transcription_step(file: UploadFile) -> tuple[Transcript, bytes]:
     if file.filename is None or file.filename == "":
         raise HTTPException(status_code=400, detail="No file uploaded.")
 
@@ -51,7 +51,7 @@ async def batchTranscriptionStep(file: UploadFile) -> tuple[Transcript, bytes]:
 
 
 # Send transcript to gemini for mood analysis
-async def moodAnalysisStep(transcript: Transcript) -> Mood:
+async def mood_analysis_step(transcript: Transcript) -> Mood:
     propmt = """
         Analyze the following transcript and give a probability to be each one of the following mood categories:
         depressed, insomnia, unmotivated, tired, anxious, stressed, unfocused, hyperactive, angry, sad, numb, confused, happy, excited, motivated, active, calm, focused, clear headed
@@ -75,13 +75,13 @@ async def moodAnalysisStep(transcript: Transcript) -> Mood:
 
     moods = Mood.model_validate_json(response.text)
     # print(f"Mood analysis step done: {moods}")
-    mood = filterMoods(moods)
+    mood = filter_moods(moods)
 
     return mood
 
 
 # Function to pick top 50% moods only
-def filterMoods(moods: Mood) -> Mood:
+def filter_moods(moods: Mood) -> Mood:
     sorted_moods = sorted(moods.mood, key=lambda x: x[1], reverse=True)
     filtered = []
     total = 0.0
@@ -95,7 +95,7 @@ def filterMoods(moods: Mood) -> Mood:
 
 
 # Upload transcript and mood to firestore
-async def uploadToFirestoreStep(transcript: Transcript, mood: Mood):
+async def upload_to_firestore_step(transcript: Transcript, mood: Mood):
     if not transcript or not mood:
         raise HTTPException(status_code=400, detail="No response data provided.")
 
@@ -119,7 +119,7 @@ async def uploadToFirestoreStep(transcript: Transcript, mood: Mood):
 
 
 # convert LINEAR16 audio to WAV
-def lin16ToWav(audio_bytes: bytes) -> bytes:
+def linear16_to_wav(audio_bytes: bytes) -> bytes:
     audio = AudioSegment(
         data=audio_bytes,
         sample_width=2,
@@ -132,7 +132,7 @@ def lin16ToWav(audio_bytes: bytes) -> bytes:
 
 
 # convert WAV to MP3
-def wavToMp3(wav_bytes: bytes) -> bytes:
+def wav_to_mp3(wav_bytes: bytes) -> bytes:
     audio = AudioSegment.from_wav(io.BytesIO(wav_bytes))
     out_io = io.BytesIO()
     audio.export(out_io, format="mp3", bitrate="192k")
@@ -140,7 +140,7 @@ def wavToMp3(wav_bytes: bytes) -> bytes:
 
 
 # convert LINEAR16 audio to FLAC
-def lin16ToFlac(audio_bytes: bytes) -> bytes:
+def linear_16_to_flac(audio_bytes: bytes) -> bytes:
     audio = AudioSegment(data=audio_bytes, sample_width=2, frame_rate=16000, channels=1)
     out_io = io.BytesIO()
     audio.export(out_io, format="flac")
@@ -148,13 +148,13 @@ def lin16ToFlac(audio_bytes: bytes) -> bytes:
 
 
 # Upload audio file to bucket
-async def uploadToBucketStep(audio_bytes: bytes, filename: str) -> str:
+async def upload_to_bucket_step(audio_bytes: bytes, filename: str) -> str:
     if not audio_bytes or not filename:
         raise HTTPException(status_code=400, detail="No audio data provided.")
 
-    # wav_bytes = lin16ToWav(audio_bytes)
-    # mp3_bytes = wavToMp3(wav_bytes)
-    flac_bytes = lin16ToFlac(audio_bytes)
+    # wav_bytes = linear16_to_wav(audio_bytes)
+    # mp3_bytes = wav_to_mp3(wav_bytes)
+    flac_bytes = linear_16_to_flac(audio_bytes)
     bucket = get_storage_client().bucket(os.getenv("BUCKET_NAME"))
 
     blob_flac = bucket.blob(f"audio/{filename}.flac")
