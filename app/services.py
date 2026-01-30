@@ -75,22 +75,7 @@ async def mood_analysis_step(transcript: Transcript) -> Mood:
 
     moods = Mood.model_validate_json(response.text)
     # print(f"Mood analysis step done: {moods}")
-    mood = filter_moods(moods)
 
-    return mood
-
-
-# Function to pick top 50% moods only
-def filter_moods(moods: Mood) -> Mood:
-    sorted_moods = sorted(moods.mood, key=lambda x: x[1], reverse=True)
-    filtered = []
-    total = 0.0
-    for label, score in sorted_moods:
-        if total >= 0.5:
-            break
-        filtered.append((label, score))
-        total += score
-    moods.mood = filtered
     return moods
 
 
@@ -104,10 +89,12 @@ async def upload_to_firestore_step(transcript: Transcript, mood: Mood):
         {
             "created_at": firestore.SERVER_TIMESTAMP,
             "mood_confidence": mood.confidence,
-            "mood_evidence": mood.evidence,
-            "moods": [{"label": label, "score": score} for label, score in mood.mood],
+            "mood_evidence": [ev.model_dump() for ev in mood.evidence],
+            "moods": [entry.model_dump() for entry in mood.mood],
             "transcript": transcript.text,
             "uid": transcript.uid,
+            "top_50_moods": [entry.model_dump() for entry in mood.top_50_moods],
+            "top_50_evidences": [entry.model_dump() for entry in mood.top_50_evidences],
         }
     )
 
