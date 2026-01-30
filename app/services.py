@@ -54,7 +54,7 @@ async def batchTranscriptionStep(file: UploadFile) -> tuple[Transcript, bytes]:
 async def moodAnalysisStep(transcript: Transcript) -> Mood:
     propmt = """
         Analyze the following transcript and give a probability to be each one of the following mood categories:
-        depressed, unmotivated, tired, anxious, stressed, unfocused, hyperactive, angry, sad, numb, confused, happy, excited, motivated, active, calm, focused, clear headed
+        depressed, insomnia, unmotivated, tired, anxious, stressed, unfocused, hyperactive, angry, sad, numb, confused, happy, excited, motivated, active, calm, focused, clear headed
         Normalize probabilities so they add up to 1.0
         Also give an overall confidence score between 0.0 and 1.0 and evidence with explanations.
     """

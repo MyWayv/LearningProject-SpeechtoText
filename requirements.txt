@@ -5,6 +5,7 @@ python-multipart
 google-cloud-speech
 google-genai
 google-cloud-firestore
+google-cloud-storage
 pytest
 ruff
 websockets
