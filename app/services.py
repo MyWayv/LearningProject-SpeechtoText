@@ -9,6 +9,7 @@ from google.cloud import firestore
 from pydub import AudioSegment
 
 from app.deps import (
+    get_elevenlabs,
     get_firestore_client,
     get_gemini_client,
     get_speech_v2_client,
@@ -25,6 +26,35 @@ async def get_from_firestore():
     for row in rows:
         records.append(row.to_dict())
     return records
+
+
+# batch transcription step with elevenlabs
+async def elevenlabs_batchTranscriptionStep(
+    file: UploadFile,
+) -> tuple[Transcript, bytes]:
+    if file.filename is None or file.filename == "":
+        raise HTTPException(status_code=400, detail="No file uploaded.")
+
+    if file.size is None or file.size == 0:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+
+    # raw audio bytes in data for mp3(?) conversion later and saving to bucket
+    data = await file.read()
+    wav_data = lin16ToWav(data)
+
+    transcript = get_elevenlabs().speech_to_text.convert(
+        file=wav_data,
+        model_id="scribe_v2",
+        tag_audio_events=True,
+        language_code="eng",
+        diarize=True,
+    )
+
+    transcript = Transcript(
+        text=str(transcript.text),
+    )
+    # print(f"Transcript step done: {transcript}")
+    return transcript, data
 
 
 # Send entire audio file for batch transcription

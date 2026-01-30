@@ -11,3 +11,4 @@ websockets
 pydub
 audioop-lts
 dotenv
+elevenlabs

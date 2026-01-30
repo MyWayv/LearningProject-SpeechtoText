@@ -9,6 +9,7 @@ from fastapi import (
 
 from app.services import (
     batchTranscriptionStep,
+    elevenlabs_batchTranscriptionStep,
     get_from_firestore,
     moodAnalysisStep,
     uploadToBucketStep,
@@ -17,11 +18,16 @@ from app.services import (
 
 router = APIRouter(tags=["http"])
 
+useElevenlabs = True
+
 
 # POST batch audio processing endpoint
 @router.post(os.getenv("BATCH_PROCESS_AUDIO_URL"))
 async def batch_process_audio(file: Annotated[UploadFile, File(...)]):
-    transcript, data = await batchTranscriptionStep(file)
+    if useElevenlabs:
+        transcript, data = await elevenlabs_batchTranscriptionStep(file)
+    else:
+        transcript, data = await batchTranscriptionStep(file)
     mood = await moodAnalysisStep(transcript)
     res = await uploadToFirestoreStep(transcript, mood)
     if res["uid"]:
