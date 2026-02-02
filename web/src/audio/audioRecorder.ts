@@ -69,7 +69,6 @@ export default class AudioRecorder {
   }
 
   private setRecordingStatus(status: boolean): void {
-    console.log("setRecordingStatus:", status);
     this.isRecording = status;
   }
 

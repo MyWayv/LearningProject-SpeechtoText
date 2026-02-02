@@ -52,18 +52,54 @@ async def batch_transcription_step(file: UploadFile) -> tuple[Transcript, bytes]
 
 # Send transcript to gemini for mood analysis
 def mood_analysis_step(transcript: Transcript) -> Mood:
-    propmt = """
-        Analyze the following transcript and give a probability to be each one of the following mood categories:
-        depressed, insomnia, unmotivated, tired, anxious, stressed, unfocused, hyperactive, angry, sad, numb, confused, happy, excited, motivated, active, calm, focused, clear headed
-        Normalize probabilities so they add up to 1.0
-        Also give an overall confidence score between 0.0 and 1.0 and evidence with explanations.
+    prompt = """
+        You are an emotional analysis agent for a mental-wellbeing music application.
+
+        Your task is: 
+        Analyze the user's spoken transcript and give a probability with evidence for each of the following mood categories.
+        Normalize probabilities so they add up to 1.0.
+        Also give an overall confidence score.
+
+        IMPORTANT CONSTRAINTS:
+        - You MUST output STRICT JSON only.
+        - Do NOT invent new emotion labels.
+        
+        MOOD CATEGORIES:
+        depressed
+        insomnia
+        unmotivated
+        tired
+        anxious
+        stressed
+        unfocused
+        hyperactive
+        angry
+        sad
+        numb
+        confused
+        happy
+        excited
+        motivated
+        active
+        calm
+        focused
+        clear headed
+                
+        CONFIDENCE DEFINITION:
+        - Confidence is a number between 0 and 1.
+        - It represents how confident you are that the chosen moods and scores are appropriate and helpful for the user.
+        - This is NOT a probability and does NOT need to sum to anything.
+        - Higher confidence means clearer emotional signal and clearer intervention fit.
+        
+        USER TRANSCRIPT:
+        {transcript_text}
     """
 
-    transcript_data = transcript.model_dump()
+    prompt_filled = prompt.format(transcript_text=transcript.text)
 
     response = get_gemini_client().models.generate_content(
         model="gemini-3-pro-preview",
-        contents=[propmt, str(transcript_data)],
+        contents=[prompt_filled],
         config={
             "response_mime_type": "application/json",
             "response_json_schema": Mood.model_json_schema(),

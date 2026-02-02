@@ -32,7 +32,9 @@ class Mood(BaseModel):
     mood: list[MoodEntry] = Field(
         ..., min_length=1, description="Detected mood label from the audio"
     )
-    confidence: float = Field(..., description="Confidence score of the mood detection")
+    confidence: float = Field(
+        ..., gt=0.0, lt=1.0, description="Confidence score of the mood detection"
+    )
     evidence: list[EvidenceEntry] = Field(
         ..., description="Evidence supporting the mood and its score"
     )

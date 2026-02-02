@@ -2,7 +2,6 @@ import asyncio
 import os
 import threading
 import time
-import uuid
 from queue import Queue
 from threading import Event
 
@@ -11,7 +10,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from google.cloud.speech_v2.types import cloud_speech
+from google.cloud.speech_v2.types import cloud_speech  # type: ignore
 
 from app.deps import get_speech_v2_client
 from app.models import Transcript

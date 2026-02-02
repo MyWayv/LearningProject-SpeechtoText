@@ -29,7 +29,7 @@ export default class UpdateButton {
       this.transcriptionListComponent.update(records);
       this.transcriptionListComponent.show();
     } catch (err) {
-      console.log("Failed to update records.");
+      alert("Failed to update records.");
     }
     this.buttonElement.disabled = false;
   }
