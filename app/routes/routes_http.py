@@ -28,9 +28,9 @@ def process_final_transcript(transcript: Transcript, audioBytes: bytes):
         res = upload_to_firestore_step(transcript, mood)
         if res["uid"]:
             upload_to_bucket_step(audioBytes, res["uid"])
-        print("final transcript processing done:", res)
+        print("[BATCH] final transcript processing done:", res)
     except Exception as e:
-        print("error during final transcript processing:", e)
+        print("[BATCH] error during final transcript processing:", e)
 
 
 # POST batch audio processing endpoint
@@ -41,8 +41,10 @@ async def batch_process_audio(
     provider: Literal["google", "elevenlabs"] = "google",
 ):
     if provider == "elevenlabs":
+        print("[BATCH] Using ElevenLabs STT provider")
         transcript, data = await elevenlabs_batch_transcription_step(file)
     else:
+        print("[BATCH] Using Google STT provider")
         transcript, data = await batch_transcription_step(file)
     background_tasks.add_task(process_final_transcript, transcript, data)
 

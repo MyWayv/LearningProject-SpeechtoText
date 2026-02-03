@@ -4,7 +4,7 @@ from elevenlabs import ElevenLabs
 from google import genai
 from google.auth import default
 from google.cloud import firestore, storage
-from google.cloud.speech_v2 import SpeechClient
+from google.cloud.speech_v2 import SpeechClient  # type: ignore
 
 # Clients startup and config
 credentials, project = default()

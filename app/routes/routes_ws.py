@@ -33,12 +33,13 @@ def process_final_transcript(transcript: Transcript, audioBytes: bytes):
         res = upload_to_firestore_step(transcript, mood)
         if res["uid"]:
             upload_to_bucket_step(audioBytes, res["uid"])
-        print("final transcript processing done:", res)
+        print("[STREAMING] final transcript processing done:", res)
     except Exception as e:
-        print("error during final transcript processing:", e)
+        print("[STREAMING] error during final transcript processing:", e)
 
 
 async def stt_elevenlabs(audio_queue, res_queue, stop):
+    print("[STREAMING] Starting ElevenLabs STT connection")
     elevenlabs = get_elevenlabs()
     connection = await elevenlabs.speech_to_text.realtime.connect(
         RealtimeAudioOptions(
@@ -55,7 +56,7 @@ async def stt_elevenlabs(audio_queue, res_queue, stop):
     )
 
     def on_session_started(data):
-        print(f"Session started: {data}")
+        print(f"[STREAMING] ElevenLabs session started: {data}")
 
     def on_partial_transcript(data):
         res_queue.put_nowait(
@@ -74,11 +75,11 @@ async def stt_elevenlabs(audio_queue, res_queue, stop):
         )
 
     def on_error(error):
-        print(f"Error: {error}")
+        print(f"[STREAMING] ElevenLabs error: {error}")
         stop.set()
 
     def on_close():
-        print("Connection closed")
+        print("[STREAMING] ElevenLabs connection closed")
         stop.set()
 
     connection.on(RealtimeEvents.SESSION_STARTED, on_session_started)
@@ -107,6 +108,7 @@ async def stt_elevenlabs(audio_queue, res_queue, stop):
 @router.websocket(os.getenv("STREAM_PROCESS_AUDIO_URL"))
 async def websocket_stream_process_audio(websocket: WebSocket):
     def stt_thread():
+        print("[STREAMING] Starting Google STT thread")
         try:
             while not stop.is_set():
                 start = time.time()
@@ -148,16 +150,21 @@ async def websocket_stream_process_audio(websocket: WebSocket):
     config_data = await websocket.receive_json()
     provider = config_data.get("provider", "google")
 
+    print(f"[STREAMING] Received config: {config_data}")
+    print(f"[STREAMING] Provider value: {provider}")
+
     if provider not in ["google", "elevenlabs"]:
         await websocket.close(code=1003)
         return
 
     if provider == "elevenlabs":
+        print("[STREAMING] Using ElevenLabs STT provider")
         audio_queue = asyncio.Queue()
         res_queue = asyncio.Queue()
         stop = asyncio.Event()
         stt_task = asyncio.create_task(stt_elevenlabs(audio_queue, res_queue, stop))
     else:
+        print("[STREAMING] Using Google STT provider")
         audio_queue = Queue()
         res_queue = Queue()
         stop = Event()
@@ -181,15 +188,23 @@ async def websocket_stream_process_audio(websocket: WebSocket):
                     audio_queue.put(chunk)
                     audioBytes.extend(chunk)
 
-            while not res_queue.empty():
-                res = res_queue.get()
-                if res["is_final"]:
-                    full_transcript += res["transcript"] + ". "
-                await websocket.send_json(res)
+            # Check for responses
+            if provider == "elevenlabs":
+                while not res_queue.empty():
+                    res = await res_queue.get()
+                    if res["is_final"]:
+                        full_transcript += res["transcript"] + ". "
+                    await websocket.send_json(res)
+            else:
+                while not res_queue.empty():
+                    res = res_queue.get()
+                    if res["is_final"]:
+                        full_transcript += res["transcript"] + ". "
+                    await websocket.send_json(res)
     except WebSocketDisconnect as e:
-        print(f"websocket disconnected: {e}")
+        print(f"[STREAMING] Websocket disconnected: {e}")
     except Exception as e:
-        print(f"error during websocket communication: {e}")
+        print(f"[STREAMING] error during websocket communication: {e}")
     finally:
         stop.set()
         if provider == "elevenlabs":
@@ -208,4 +223,4 @@ async def websocket_stream_process_audio(websocket: WebSocket):
                 asyncio.to_thread(process_final_transcript, transcript, audioBytes)
             )
         else:
-            print("No transcript to process, skipping final processing.")
+            print("[STREAMING] No transcript to process, skipping final processing.")
