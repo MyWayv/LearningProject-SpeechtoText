@@ -62,7 +62,7 @@ def mood_analysis_step(transcript: Transcript) -> Mood:
 
         IMPORTANT CONSTRAINTS:
         - You MUST output STRICT JSON only.
-        - Do NOT invent new emotion labels.
+        - Do NOT invent new mood categories.
         
         MOOD CATEGORIES:
         depressed
