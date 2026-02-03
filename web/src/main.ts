@@ -98,7 +98,6 @@ const transcriptionModeToggle = new TranscriptionModeToggle(
 const sttProviderToggle = new STTProviderToggle(
   sttProviderToggleContainer,
   (provider) => {
-    console.log("[FRONTEND] Toggle changed to:", provider);
     audioRecorder.setSTTProvider(provider);
     streamingService.setProvider(provider);
     realtimeTranscriptComponent.setProvider(provider);
