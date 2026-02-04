@@ -45,6 +45,9 @@ async def analyze_mood(
         USER QUESTION AND ANSWER HISTORY:
         {qa_history}
 
+        DETECTED MOODS AND CONFIDENCE LEVELS:
+        {mood_history}
+
         USER LATEST QUESTION:
         {latest_question}
 
@@ -67,6 +70,7 @@ async def analyze_mood(
     prompt_filled = prompt.format(
         wheel_of_emotions=get_wheel_of_emotions(),
         qa_history="\n".join([f"Q: {q}\nA: {a}" for q, a in qa_pairs]),
+        mood_history="\n".join([f"Mood: {m}, Confidence: {c}" for m, c in moods]),
         latest_question=question,
         latest_answer=answer,
     )
