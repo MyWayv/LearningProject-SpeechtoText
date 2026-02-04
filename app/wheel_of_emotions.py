@@ -62,7 +62,6 @@ def get_wheel_of_emotions():
 
 
 def get_emotion_depth(mood: str, wheel: dict) -> int:
-    """Determine the depth level of an emotion in the wheel (1=primary, 2=secondary, 3=tertiary)"""
     if not mood:
         return 0
 

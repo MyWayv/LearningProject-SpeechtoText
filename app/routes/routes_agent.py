@@ -15,7 +15,7 @@ from fastapi import (
 
 from app.agent import analyze_mood, get_next_question
 from app.deps import get_elevenlabs
-from app.models import AgentSession, QAPair
+from app.models import AgentSession, QAMoodPair
 from app.services import upload_agent_audio_to_bucket, upload_agent_session
 from app.wheel_of_emotions import get_emotion_depth, get_wheel_of_emotions
 
@@ -25,7 +25,6 @@ router = APIRouter(tags=["agent"])
 async def stt_elevenlabs_session(
     audio_queue, res_queue, answer_transcript_container, answer_ready
 ):
-    """Start a single ElevenLabs STT session for one Q&A cycle"""
     print("[STT] Starting ElevenLabs STT session")
     elevenlabs = get_elevenlabs()
     stop = asyncio.Event()
@@ -66,7 +65,7 @@ async def stt_elevenlabs_session(
                 "is_final": True,
             }
         )
-        # Signal that answer is ready (VAD detected end of speech)
+        # signal that answer is ready (VAD detected end of speech)
         print(f"[STT] VAD detected silence, answer complete: {text}")
         answer_ready.set()
 
@@ -94,7 +93,7 @@ async def stt_elevenlabs_session(
                 if chunk is None:
                     break
 
-                # Rate limit to prevent queue overflow
+                # rate limit to prevent queue overflow
                 current_time = asyncio.get_event_loop().time()
                 time_since_last = current_time - last_send_time
                 if time_since_last < min_interval:
@@ -108,7 +107,7 @@ async def stt_elevenlabs_session(
 
     sender = asyncio.create_task(send_audio())
     try:
-        # Wait for either answer_ready or stop event
+        # wait for either answer_ready or stop event
         await asyncio.wait(
             [
                 asyncio.create_task(answer_ready.wait()),
@@ -138,7 +137,7 @@ async def receive_audio(
             data = await websocket.receive_bytes()
             audio_queue.put_nowait(data)
             audioBytes.extend(data)
-            # Check for responses and send to client
+            # check for responses and send to client
             while not res_queue.empty():
                 res = await res_queue.get()
                 await websocket.send_json(res)
@@ -154,25 +153,24 @@ def upload_session_in_background(
     audio_bytes: bytearray,
     session_id: str,
     session_timestamp: str,
-    qa_pairs_with_moods: list[QAPair],
+    qa_pairs_with_moods: list[QAMoodPair],
     final_mood: str,
     final_confidence: float,
     final_depth: int,
     question_count: int,
 ):
-    """Upload session data in background thread (works for complete and incomplete sessions)"""
     try:
-        # Only upload if we have audio data
+        # only upload if we have audio data
         if not audio_bytes:
             print(f"[AGENT] No audio data to upload for session: {session_id}")
             return
 
-        # Upload audio to bucket
+        # upload audio to bucket
         audio_url = upload_agent_audio_to_bucket(
             bytes(audio_bytes), session_id, session_timestamp
         )
 
-        # Create session object
+        # create session object
         session = AgentSession(
             session_id=session_id,
             created_at=datetime.fromisoformat(session_timestamp),
@@ -184,7 +182,7 @@ def upload_session_in_background(
             audio_url=audio_url,
         )
 
-        # Upload session to Firestore
+        # upload session to Firestore
         upload_agent_session(session)
         print(f"[AGENT] Background upload completed for session: {session_id}")
     except Exception as e:
@@ -212,19 +210,16 @@ async def websocket_agent(websocket: WebSocket):
         # [mood, confidence]
         moods: list[tuple[str, float]] = []
         # QAPair objects for upload
-        qa_pairs_with_moods: list[QAPair] = []
+        qa_pairs_with_moods: list[QAMoodPair] = []
         wheel = get_wheel_of_emotions()
 
-        # Start receiving audio continuously
+        # start receiving audio continuously
         receive_task = asyncio.create_task(
             receive_audio(websocket, audio_queue, audioBytes, res_queue)
         )
 
-        # Continue asking questions until:
-        # 1. Confidence >= 0.9 AND depth == 3 (tertiary emotion with high confidence), OR
-        # 2. Max questions reached
         while question_counter < max_questions:
-            # Check if we should stop: high confidence AND max depth reached
+            # check if should stop: high confidence and max depth reached
             if mood_confidence >= 0.9 and current_depth >= max_depth:
                 print(
                     f"[AGENT] Stopping: High confidence ({mood_confidence}) at depth {current_depth}"
@@ -243,11 +238,11 @@ async def websocket_agent(websocket: WebSocket):
             print(f"[AGENT] Question {question_counter + 1}: {question}")
             await websocket.send_json({"type": "question", "text": question})
 
-            # Wait for user to read the question (frontend shows grey ball during this time)
+            # wait for user to read the question
             print("[AGENT] Waiting 5 seconds for user to read question...")
             await asyncio.sleep(5.0)
 
-            # NOW clear old audio from queue (discard the 5 seconds of silence/ambient noise)
+            # clear old audio from queue
             cleared = 0
             while not audio_queue.empty():
                 try:
@@ -258,11 +253,11 @@ async def websocket_agent(websocket: WebSocket):
             if cleared > 0:
                 print(f"[AGENT] Cleared {cleared} old audio chunks from queue")
 
-            # Signal frontend that we're now listening for the answer (turn ball red)
+            # signal frontend to update UI
             print("[AGENT] Now listening for user response...")
             await websocket.send_json({"type": "listening"})
 
-            # Start new STT session for this answer
+            # start new STT session for this answer
             answer_transcript_container = {"current": ""}
             answer_ready = asyncio.Event()
 
@@ -273,13 +268,13 @@ async def websocket_agent(websocket: WebSocket):
                 )
             )
 
-            # Wait for VAD to detect end of speech
+            # wait for VAD to detect end of speech
             print(
                 f"[AGENT] Waiting for user response to question {question_counter + 1}..."
             )
             await answer_ready.wait()
 
-            # Wait for STT task to complete cleanup
+            # wait for STT task to complete cleanup
             await stt_task
 
             answer_transcript = answer_transcript_container["current"]
@@ -291,7 +286,7 @@ async def websocket_agent(websocket: WebSocket):
                 qa_pairs, moods, question, answer_transcript
             )
 
-            # Determine depth of detected emotion
+            # determine depth of detected emotion
             current_depth = get_emotion_depth(mood, wheel)
             depth_name = (
                 ["unknown", "primary", "secondary", "tertiary"][current_depth]
@@ -307,7 +302,7 @@ async def websocket_agent(websocket: WebSocket):
             qa_pairs.append((question, answer_transcript))
             moods.append((mood, mood_confidence))
             qa_pairs_with_moods.append(
-                QAPair(
+                QAMoodPair(
                     question=question,
                     answer=answer_transcript,
                     mood=mood,
@@ -317,7 +312,7 @@ async def websocket_agent(websocket: WebSocket):
             )
             question_counter += 1
 
-        # Determine final depth
+        # determine final depth
         final_depth = get_emotion_depth(mood, wheel)
         depth_name = (
             ["unknown", "primary", "secondary", "tertiary"][final_depth]
@@ -343,12 +338,12 @@ async def websocket_agent(websocket: WebSocket):
             print(
                 f"[AGENT] Max questions reached. Best mood: {mood} ({depth_name}), confidence: {mood_confidence}"
             )
-            # Send the best mood we found, even if not 0.9 confidence
+            # send the best mood, even if not 0.9 confidence
             await websocket.send_json(
                 {"type": "result", "mood": mood, "confidence": mood_confidence}
             )
 
-        # Give frontend time to receive final message before cleanup
+        # give frontend time to receive final message before cleanup
         await asyncio.sleep(0.5)
 
     except WebSocketDisconnect as e:
@@ -371,7 +366,7 @@ async def websocket_agent(websocket: WebSocket):
             except Exception as e:
                 print(f"[AGENT] Error during receive_task cleanup: {e}")
 
-        # Upload session data in background (works for complete and incomplete sessions)
+        # upload session data in background (works for complete and incomplete sessions)
         if "qa_pairs_with_moods" in locals():
             upload_thread = threading.Thread(
                 target=upload_session_in_background,

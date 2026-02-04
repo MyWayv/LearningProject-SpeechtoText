@@ -3,9 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class QAPair(BaseModel):
-    """Single question-answer pair with detected emotion"""
-
+class QAMoodPair(BaseModel):
     question: str
     answer: str
     mood: str
@@ -14,13 +12,11 @@ class QAPair(BaseModel):
 
 
 class AgentSession(BaseModel):
-    """Complete agent session with all Q&A pairs and final result"""
-
     model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
 
     session_id: str
     created_at: datetime
-    qa_pairs: list[QAPair]
+    qa_pairs: list[QAMoodPair]
     final_mood: str
     final_confidence: float = Field(ge=0.0, le=1.0)
     final_depth: int = Field(ge=1, le=3)

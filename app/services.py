@@ -10,7 +10,6 @@ from app.models import AgentSession
 
 # Upload agent session to Firestore
 def upload_agent_session(session: AgentSession):
-    """Upload complete agent session to Firestore 'sessions' collection"""
     try:
         doc_ref = get_firestore_client().collection("sessions")
         write_res = doc_ref.document(session.session_id).set(session.model_dump())
@@ -41,7 +40,6 @@ def linear_16_to_flac(audio_bytes: bytes) -> bytes:
 def upload_agent_audio_to_bucket(
     audio_bytes: bytes, session_id: str, timestamp: str
 ) -> str:
-    """Upload agent session audio to GCS bucket as FLAC"""
     if not audio_bytes or not session_id:
         raise HTTPException(status_code=400, detail="No audio data provided.")
 

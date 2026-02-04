@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from app.models import AgentSession, QAPair
+from app.models import AgentSession, QAMoodPair
 
 
 class TestQAPair:
@@ -11,7 +11,7 @@ class TestQAPair:
 
     def test_valid_qapair(self):
         """Test valid QAPair creation"""
-        qa = QAPair(
+        qa = QAMoodPair(
             question="How are you feeling?",
             answer="I feel happy",
             mood="joyful",
@@ -27,41 +27,49 @@ class TestQAPair:
     def test_confidence_boundaries(self):
         """Test confidence must be 0-1"""
         # Valid boundaries
-        qa_min = QAPair(question="Q", answer="A", mood="happy", confidence=0.0, depth=1)
+        qa_min = QAMoodPair(
+            question="Q", answer="A", mood="happy", confidence=0.0, depth=1
+        )
         assert qa_min.confidence == 0.0
 
-        qa_max = QAPair(question="Q", answer="A", mood="happy", confidence=1.0, depth=1)
+        qa_max = QAMoodPair(
+            question="Q", answer="A", mood="happy", confidence=1.0, depth=1
+        )
         assert qa_max.confidence == 1.0
 
         # Invalid - too low
         with pytest.raises(ValidationError):
-            QAPair(question="Q", answer="A", mood="happy", confidence=-0.1, depth=1)
+            QAMoodPair(question="Q", answer="A", mood="happy", confidence=-0.1, depth=1)
 
         # Invalid - too high
         with pytest.raises(ValidationError):
-            QAPair(question="Q", answer="A", mood="happy", confidence=1.1, depth=1)
+            QAMoodPair(question="Q", answer="A", mood="happy", confidence=1.1, depth=1)
 
     def test_depth_boundaries(self):
         """Test depth must be 1-3"""
         # Valid boundaries
-        qa_min = QAPair(question="Q", answer="A", mood="happy", confidence=0.5, depth=1)
+        qa_min = QAMoodPair(
+            question="Q", answer="A", mood="happy", confidence=0.5, depth=1
+        )
         assert qa_min.depth == 1
 
-        qa_max = QAPair(question="Q", answer="A", mood="happy", confidence=0.5, depth=3)
+        qa_max = QAMoodPair(
+            question="Q", answer="A", mood="happy", confidence=0.5, depth=3
+        )
         assert qa_max.depth == 3
 
         # Invalid - too low
         with pytest.raises(ValidationError):
-            QAPair(question="Q", answer="A", mood="happy", confidence=0.5, depth=0)
+            QAMoodPair(question="Q", answer="A", mood="happy", confidence=0.5, depth=0)
 
         # Invalid - too high
         with pytest.raises(ValidationError):
-            QAPair(question="Q", answer="A", mood="happy", confidence=0.5, depth=4)
+            QAMoodPair(question="Q", answer="A", mood="happy", confidence=0.5, depth=4)
 
     def test_required_fields(self):
         """Test all fields are required"""
         with pytest.raises(ValidationError):
-            QAPair()
+            QAMoodPair()
 
 
 class TestAgentSession:
@@ -70,7 +78,7 @@ class TestAgentSession:
     def test_valid_agent_session(self):
         """Test valid AgentSession creation"""
         now = datetime.now()
-        qa_pair = QAPair(
+        qa_pair = QAMoodPair(
             question="How are you?",
             answer="Good",
             mood="content",
@@ -100,7 +108,7 @@ class TestAgentSession:
     def test_final_confidence_boundaries(self):
         """Test final_confidence must be 0-1"""
         now = datetime.now()
-        qa_pair = QAPair(
+        qa_pair = QAMoodPair(
             question="Q", answer="A", mood="happy", confidence=0.5, depth=1
         )
 
@@ -145,7 +153,7 @@ class TestAgentSession:
     def test_final_depth_boundaries(self):
         """Test final_depth must be 1-3"""
         now = datetime.now()
-        qa_pair = QAPair(
+        qa_pair = QAMoodPair(
             question="Q", answer="A", mood="happy", confidence=0.5, depth=1
         )
 
@@ -190,7 +198,7 @@ class TestAgentSession:
     def test_question_count_boundaries(self):
         """Test question_count must be 1-5"""
         now = datetime.now()
-        qa_pair = QAPair(
+        qa_pair = QAMoodPair(
             question="Q", answer="A", mood="happy", confidence=0.5, depth=1
         )
 
@@ -249,9 +257,15 @@ class TestAgentSession:
         """Test session with multiple Q&A pairs"""
         now = datetime.now()
         qa_pairs = [
-            QAPair(question="Q1", answer="A1", mood="happy", confidence=0.5, depth=1),
-            QAPair(question="Q2", answer="A2", mood="content", confidence=0.7, depth=2),
-            QAPair(question="Q3", answer="A3", mood="joyful", confidence=0.9, depth=3),
+            QAMoodPair(
+                question="Q1", answer="A1", mood="happy", confidence=0.5, depth=1
+            ),
+            QAMoodPair(
+                question="Q2", answer="A2", mood="content", confidence=0.7, depth=2
+            ),
+            QAMoodPair(
+                question="Q3", answer="A3", mood="joyful", confidence=0.9, depth=3
+            ),
         ]
         session = AgentSession(
             session_id="test",
@@ -271,7 +285,7 @@ class TestAgentSession:
     def test_json_serialization(self):
         """Test datetime JSON serialization"""
         now = datetime.now()
-        qa_pair = QAPair(
+        qa_pair = QAMoodPair(
             question="Q", answer="A", mood="happy", confidence=0.5, depth=1
         )
         session = AgentSession(
