@@ -3,6 +3,7 @@ const WS_URL = import.meta.env.VITE_AGENT_URL;
 export default class StreamingService {
   private websocket: WebSocket | null = null;
   private onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void;
+  private onQuestionAudio?: (chunk: any) => void;
   private onQuestion?: (question: string) => void;
   private onListening?: () => void;
   private onAnalyzing?: () => void;
@@ -10,18 +11,21 @@ export default class StreamingService {
   private onNoResult?: (message: string) => void;
   private onError?: (message: string) => void;
   private onWebSocketClosed?: () => void;
+  private helper: any = null;
 
   constructor(
-    onTranscriptUpdate: (transcript: string, isFinal: boolean) => void,
-    onQuestion: (question: string) => void,
-    onListening: () => void,
-    onAnalyzing: () => void,
-    onResult: (mood: string, confidence: number) => void,
-    onNoResult: (message: string) => void,
-    onError: (message: string) => void,
-    onWebSocketClosed: () => void,
+    onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void,
+    onQuestionAudio?: (chunk: any) => void,
+    onQuestion?: (question: string) => void,
+    onListening?: () => void,
+    onAnalyzing?: () => void,
+    onResult?: (mood: string, confidence: number) => void,
+    onNoResult?: (message: string) => void,
+    onError?: (message: string) => void,
+    onWebSocketClosed?: () => void,
   ) {
     this.onTranscriptUpdate = onTranscriptUpdate;
+    this.onQuestionAudio = onQuestionAudio;
     this.onQuestion = onQuestion;
     this.onListening = onListening;
     this.onAnalyzing = onAnalyzing;
@@ -31,26 +35,71 @@ export default class StreamingService {
     this.onWebSocketClosed = onWebSocketClosed;
   }
 
+  public setHelper(helper: any): void {
+    this.helper = helper;
+  }
+
   public connect(): void {
-    if (
-      this.websocket &&
-      (this.websocket.readyState === WebSocket.OPEN ||
-        this.websocket.readyState === WebSocket.CONNECTING)
-    ) {
-      this.websocket.close();
-      return;
-    }
     this.websocket = new WebSocket(WS_URL);
 
     this.websocket.onopen = () => {
-      console.log("WebSocket connected");
+      console.log("WebSocket connection opened");
+      if (this.helper) {
+        this.helper.setWebSocket(this.websocket);
+      }
     };
 
-    this.websocket.onclose = () => {
-      if (this.onWebSocketClosed) {
-        this.onWebSocketClosed();
+    this.websocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        switch (data.type) {
+          case "transcript":
+            if (this.onTranscriptUpdate) {
+              this.onTranscriptUpdate(data.transcript, data.is_final);
+            }
+            break;
+          case "question_audio_base_64":
+            if (this.onQuestionAudio) {
+              this.onQuestionAudio(data.chunk);
+            }
+            break;
+          case "question":
+            if (this.onQuestion) {
+              this.onQuestion(data.text);
+            }
+            break;
+          case "listening":
+            if (this.onListening) {
+              this.onListening();
+            }
+            break;
+          case "analyzing":
+            if (this.onAnalyzing) {
+              this.onAnalyzing();
+            }
+            break;
+          case "result":
+            if (this.onResult) {
+              this.onResult(data.mood, data.confidence);
+            }
+            break;
+          case "no_result":
+            if (this.onNoResult) {
+              this.onNoResult(data.message);
+            }
+            break;
+          case "error":
+            if (this.onError) {
+              this.onError(data.message);
+            }
+            break;
+        }
+      } catch (error) {
+        if (this.onError) {
+          this.onError(`Error parsing message: ${error}`);
+        }
       }
-      this.websocket = null;
     };
 
     this.websocket.onerror = (error) => {
@@ -60,47 +109,10 @@ export default class StreamingService {
       }
     };
 
-    this.websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      switch (data.type) {
-        case "transcript":
-          if (this.onTranscriptUpdate) {
-            this.onTranscriptUpdate(data.transcript, data.is_final || false);
-          }
-          break;
-        case "question":
-          if (this.onQuestion) {
-            this.onQuestion(data.text);
-          }
-          break;
-        case "listening":
-          if (this.onListening) {
-            this.onListening();
-          }
-          break;
-        case "analyzing":
-          if (this.onAnalyzing) {
-            this.onAnalyzing();
-          }
-          break;
-        case "result":
-          if (this.onResult) {
-            this.onResult(data.mood, data.confidence);
-          }
-          break;
-        case "no_result":
-          if (this.onNoResult) {
-            this.onNoResult(data.message);
-          }
-          break;
-        case "error":
-          if (this.onError) {
-            this.onError(data.message);
-          }
-          break;
-        default:
-          console.warn("Unknown message type:", data.type);
+    this.websocket.onclose = () => {
+      console.log("WebSocket connection closed");
+      if (this.onWebSocketClosed) {
+        this.onWebSocketClosed();
       }
     };
   }
@@ -108,6 +120,7 @@ export default class StreamingService {
   public disconnect(): void {
     if (this.websocket) {
       this.websocket.close();
+      this.websocket = null;
     }
   }
 
@@ -118,6 +131,10 @@ export default class StreamingService {
   }
 
   public isWebSocketOpen(): boolean {
-    return !!this.websocket && this.websocket.readyState === WebSocket.OPEN;
+    return this.websocket?.readyState === WebSocket.OPEN;
+  }
+
+  public getWebSocket(): WebSocket | null {
+    return this.websocket;
   }
 }

@@ -1,17 +1,19 @@
 import asyncio
 import base64
+import json
 import os
 import threading
 import uuid
 from datetime import datetime
 
-from elevenlabs import RealtimeAudioOptions, RealtimeEvents
+from elevenlabs import RealtimeAudioOptions, RealtimeEvents, VoiceSettings
 from elevenlabs.realtime.scribe import AudioFormat, CommitStrategy
 from fastapi import (
     APIRouter,
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.websockets import WebSocketState
 
 from app.agent import analyze_mood, get_next_question
 from app.deps import get_elevenlabs
@@ -23,7 +25,7 @@ router = APIRouter(tags=["agent"])
 
 
 async def stt_elevenlabs_session(
-    audio_queue, res_queue, answer_transcript_container, answer_ready
+    audio_queue, res_queue, answer_transcript_container, answer_ready, websocket
 ):
     print("[STT] Starting ElevenLabs STT session")
     elevenlabs = get_elevenlabs()
@@ -47,24 +49,26 @@ async def stt_elevenlabs_session(
         print(f"[STT] Session started: {data.get('session_id', 'unknown')}")
 
     def on_partial_transcript(data):
-        res_queue.put_nowait(
-            {
-                "type": "transcript",
-                "transcript": data.get("text", ""),
-                "is_final": False,
-            }
-        )
+        transcript_data = {
+            "type": "transcript",
+            "transcript": data.get("text", ""),
+            "is_final": False,
+        }
+        res_queue.put_nowait(transcript_data)
+        # send to frontend
+        asyncio.create_task(websocket.send_json(transcript_data))
 
     def on_committed_transcript(data):
         text = data.get("text", "")
         answer_transcript_container["current"] += text
-        res_queue.put_nowait(
-            {
-                "type": "transcript",
-                "transcript": text,
-                "is_final": True,
-            }
-        )
+        transcript_data = {
+            "type": "transcript",
+            "transcript": text,
+            "is_final": True,
+        }
+        res_queue.put_nowait(transcript_data)
+        # send to frontend
+        asyncio.create_task(websocket.send_json(transcript_data))
         # signal that answer is ready (VAD detected end of speech)
         print(f"[STT] VAD detected silence, answer complete: {text}")
         answer_ready.set()
@@ -133,20 +137,33 @@ async def receive_audio(
 ):
     try:
         while True:
-            # get audio data
-            data = await websocket.receive_bytes()
-            audio_queue.put_nowait(data)
-            audioBytes.extend(data)
-            # check for responses and send to client
-            while not res_queue.empty():
-                res = await res_queue.get()
-                await websocket.send_json(res)
+            message = await websocket.receive()
+
+            if message["type"] == "websocket.disconnect":
+                print("[AGENT] Client disconnected during audio reception")
+                break
+
+            # handle JSON messages (like audio_playback_finished)
+            if message["type"] == "websocket.receive":
+                if "text" in message:
+                    try:
+                        json_message = json.loads(message["text"])
+                        if json_message.get("type") == "audio_playback_finished":
+                            # Put signal in response queue
+                            await res_queue.put({"type": "audio_playback_finished"})
+                            continue
+                    except json.JSONDecodeError:
+                        pass
+
+                # handle binary audio data
+                if "bytes" in message:
+                    audio_data = message["bytes"]
+                    audioBytes.extend(audio_data)
+                    await audio_queue.put(audio_data)
     except WebSocketDisconnect:
-        print("[STREAMING] receive_audio: WebSocket disconnected")
-        raise
+        print("[AGENT] WebSocket disconnected in receive_audio")
     except Exception as e:
-        print(f"[STREAMING] receive_audio error: {e}")
-        raise
+        print(f"[AGENT] Error in receive_audio: {e}")
 
 
 def upload_session_in_background(
@@ -189,6 +206,31 @@ def upload_session_in_background(
         print(f"[AGENT] Background upload failed for session {session_id}: {e}")
 
 
+async def tts_elevenlabs_session(text: str, websocket: WebSocket):
+    response = get_elevenlabs().text_to_speech.stream(
+        voice_id="pNInz6obpgDQGcFmaJgB",
+        output_format="mp3_22050_32",
+        text=text,
+        model_id="eleven_multilingual_v2",
+        voice_settings=VoiceSettings(
+            stability=0.0,
+            similarity_boost=1.0,
+            style=0.0,
+            use_speaker_boost=True,
+            speed=1.0,
+        ),
+    )
+
+    # send question audio to client
+    for chunk in response:
+        if chunk and websocket.application_state == WebSocketState.CONNECTED:
+            audio_base64 = base64.b64encode(chunk).decode("utf-8")
+            await websocket.send_json(
+                {"type": "question_audio_base_64", "chunk": audio_base64}
+            )
+    await asyncio.sleep(0.1)
+
+
 @router.websocket(os.getenv("AGENT_URL"))
 async def websocket_agent(websocket: WebSocket):
     await websocket.accept()
@@ -213,7 +255,6 @@ async def websocket_agent(websocket: WebSocket):
         qa_pairs_with_moods: list[QAMoodPair] = []
         wheel = get_wheel_of_emotions()
 
-        # start receiving audio continuously
         receive_task = asyncio.create_task(
             receive_audio(websocket, audio_queue, audioBytes, res_queue)
         )
@@ -236,11 +277,28 @@ async def websocket_agent(websocket: WebSocket):
 
             # ask question
             print(f"[AGENT] Question {question_counter + 1}: {question}")
+            await tts_elevenlabs_session(question, websocket)
+            print("[AGENT] Sent all audio chunks, now sending question text")
             await websocket.send_json({"type": "question", "text": question})
 
-            # wait for user to read the question
-            print("[AGENT] Waiting 5 seconds for user to read question...")
-            await asyncio.sleep(5.0)
+            # wait for frontend to signal audio playback finished via res_queue
+            print("[AGENT] Waiting for frontend audio playback to finish...")
+            try:
+                # keep reading from queue until we get the audio_playback_finished signal
+                while True:
+                    response = await asyncio.wait_for(res_queue.get(), timeout=30.0)
+                    print(f"[AGENT] Received response from res_queue: {response}")
+                    if response.get("type") == "audio_playback_finished":
+                        print(
+                            "[AGENT] ✓ Frontend audio playback finished, proceeding to listening"
+                        )
+                        break
+                    else:
+                        print(
+                            f"[AGENT] Ignoring message type: {response.get('type')} (waiting for audio_playback_finished)"
+                        )
+            except asyncio.TimeoutError:
+                print("[AGENT] Timeout waiting for audio playback finished signal")
 
             # clear old audio from queue
             cleared = 0
@@ -253,28 +311,27 @@ async def websocket_agent(websocket: WebSocket):
             if cleared > 0:
                 print(f"[AGENT] Cleared {cleared} old audio chunks from queue")
 
-            # signal frontend to update UI
             print("[AGENT] Now listening for user response...")
             await websocket.send_json({"type": "listening"})
 
-            # start new STT session for this answer
             answer_transcript_container = {"current": ""}
             answer_ready = asyncio.Event()
 
             print(f"[AGENT] Starting STT session for question {question_counter + 1}")
             stt_task = asyncio.create_task(
                 stt_elevenlabs_session(
-                    audio_queue, res_queue, answer_transcript_container, answer_ready
+                    audio_queue,
+                    res_queue,
+                    answer_transcript_container,
+                    answer_ready,
+                    websocket,
                 )
             )
 
-            # wait for VAD to detect end of speech
             print(
                 f"[AGENT] Waiting for user response to question {question_counter + 1}..."
             )
             await answer_ready.wait()
-
-            # wait for STT task to complete cleanup
             await stt_task
 
             answer_transcript = answer_transcript_container["current"]
