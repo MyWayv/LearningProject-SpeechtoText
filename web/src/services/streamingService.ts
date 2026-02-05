@@ -12,6 +12,7 @@ export default class StreamingService {
   private onError?: (message: string) => void;
   private onWebSocketClosed?: () => void;
   private helper: any = null;
+  private selectedLLM: string = "openai";
 
   constructor(
     onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void,
@@ -39,8 +40,13 @@ export default class StreamingService {
     this.helper = helper;
   }
 
+  public setLLM(llm: string): void {
+    this.selectedLLM = llm;
+  }
+
   public connect(): void {
-    this.websocket = new WebSocket(WS_URL);
+    const wsUrl = `${WS_URL}?llm=${this.selectedLLM}`;
+    this.websocket = new WebSocket(wsUrl);
 
     this.websocket.onopen = () => {
       console.log("WebSocket connection opened");

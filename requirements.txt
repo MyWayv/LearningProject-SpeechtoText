@@ -13,3 +13,4 @@ pydub
 audioop-lts
 dotenv
 elevenlabs
+openai>=1.0.0

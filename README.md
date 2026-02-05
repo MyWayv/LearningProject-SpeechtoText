@@ -1,30 +1,27 @@
-# Learning Project - Speech to Text
-
-Minimal web application that records microphone audio, transcribes speech using Google Speech_v2, and analyzes the mood of the transcript using a Google LLM (Gemini), then saves transcript and analysis Firestore and audio on Bucket.
-
----
+# Mood Analysis
 
 ## What the application does
 
 1. Records microphone audio in the browser.
-2. Sends/streams the audio to Python backend.
-3. Transcribes speech using Google Speech_v2.
-4. Sends the transcript to Gemini for mood analysis.
-5. Stores the transcript and mood result in Firestore.
-6. Stores the audio file in a Google Bucket.
-7. Returns the transcript and mood to the browser for display.
+2. Streams the audio to Python backend.
+3. Transcribes speech using elevenlabs.
+4. Creates speech for next question using elevenlabs.
+5. Sends the transcript to Gemini/OpenAI for mood analysis and question creation.
+6. Stores the session's transcript and mood result in Firestore.
+7. Stores the audio file in a Google Bucket.
+8. Returns the transcript and mood to the browser for display.
 
 ---
 
 ## Mood analysis
 
-The mood analysis step uses an LLM to classify the overall emotional tone of the transcript.
+The mood analysis step uses an LLM to classify the overall emotional tone of the transcript using the wheel of emotions.
 
-The model returns structured JSON that includes:
+---
 
-- mood labels and their (normalized) probabilities
-- an overall confidence score between 0 and 1
-- optional evidence phrases extracted from the transcript
+## Question creation
+
+The question creation happens after mood analysis and tries to prompt users to talk about their feelings in a natural way.
 
 ---
 
@@ -48,9 +45,11 @@ Frontend:
 
 Cloud services:
 
-- Google Speech_v2
+- Elevenlabs
 
-- Gemini (LLM)
+- OpenAI
+
+- Gemini
 
 - Firestore
 
@@ -75,11 +74,7 @@ Infrastructure:
 Test the full application with static files served by FastAPI:
 
 ```bash
-cd web/
-npm run build
-cp -r dist ../app/static
-cd ..
-uvicorn app.main:app
+./rebuild.sh # from root
 ```
 
 or run ./rebuild.sh from root.
@@ -92,12 +87,13 @@ Visit `http://localhost:8000` to access the complete application.
 
 This application requires the following Google Cloud services:
 
-1. **Google Speech_v2**
-2. **Gemini API** (via Vertex AI)
-3. **Cloud Firestore**
-4. **Google Bucket**
-5. **Google Artifact Registry**
-6. **Workload Identity Federation**
+1. **Elevenlabs API key in env file**
+2. **OpenAI API key in env file**
+3. **Gemini API** (via Vertex AI)
+4. **Cloud Firestore**
+5. **Google Bucket**
+6. **Google Artifact Registry**
+7. **Workload Identity Federation**
 
 #### Prerequisites
 
@@ -109,3 +105,7 @@ This application requires the following Google Cloud services:
 #### Authentication using Application Default Credentials (ADC)
 
 This application uses Application Default Credentials (ADC) to authenticate with Google Cloud services. ADC automatically finds credentials based on the application environment.
+
+### Environmnent variables
+
+Most of the env variables are just urls for both front and back ends. at root level env file there are also the keys for OpenAI and Elevenlabs.

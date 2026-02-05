@@ -22,3 +22,12 @@ class AgentSession(BaseModel):
     final_depth: int = Field(ge=1, le=3)
     question_count: int = Field(ge=1, le=5)
     audio_url: str
+
+
+class MoodAnalysisResult(BaseModel):
+    mood: str
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class NextQuestionResult(BaseModel):
+    question: str = Field(min_length=1)

@@ -2,6 +2,7 @@ import AgentStatus from "../components/agentStatus";
 import RealtimeTranscript from "../components/realtimeTranscript";
 import RecordButton from "../components/recordButton";
 import AudioRecorder from "../audio/audioRecorder";
+import LLMPicker from "../components/llmPicker";
 
 export class StreamingServiceHelper {
   private audioChunks: Uint8Array[] = [];
@@ -9,6 +10,7 @@ export class StreamingServiceHelper {
   private realtimeTranscript: RealtimeTranscript;
   private recordButton: RecordButton;
   private audioRecorder: AudioRecorder;
+  private llmPicker: LLMPicker;
   private websocket: WebSocket | null = null;
 
   constructor(
@@ -16,11 +18,13 @@ export class StreamingServiceHelper {
     realtimeTranscript: RealtimeTranscript,
     recordButton: RecordButton,
     audioRecorder: AudioRecorder,
+    llmPicker: LLMPicker,
   ) {
     this.agentStatus = agentStatus;
     this.realtimeTranscript = realtimeTranscript;
     this.recordButton = recordButton;
     this.audioRecorder = audioRecorder;
+    this.llmPicker = llmPicker;
 
     // Bind methods to preserve 'this' context
     this.onTranscriptUpdate = this.onTranscriptUpdate.bind(this);
@@ -149,5 +153,6 @@ export class StreamingServiceHelper {
   public onWebSocketClosed(): void {
     this.recordButton.setEnabled(true);
     this.audioChunks = [];
+    this.llmPicker.setEnabled(true);
   }
 }

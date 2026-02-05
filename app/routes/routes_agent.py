@@ -15,9 +15,10 @@ from fastapi import (
 )
 from fastapi.websockets import WebSocketState
 
-from app.agent import analyze_mood, get_next_question
 from app.deps import get_elevenlabs
+from app.gemini_agent import gemini_analyze_mood, gemini_get_next_question
 from app.models import AgentSession, QAMoodPair
+from app.openai_agent import openai_analyze_mood, openai_get_next_question
 from app.services import upload_agent_audio_to_bucket, upload_agent_session
 from app.wheel_of_emotions import get_emotion_depth, get_wheel_of_emotions
 
@@ -208,7 +209,7 @@ def upload_session_in_background(
 
 async def tts_elevenlabs_session(text: str, websocket: WebSocket):
     response = get_elevenlabs().text_to_speech.stream(
-        voice_id="pNInz6obpgDQGcFmaJgB",
+        voice_id="I3MrSgiotopLY33bjEX7",  # Yaron: I3MrSgiotopLY33bjEX7, Erik: VWoIQlDpnFjY9kfJ11dz, Adam: pNInz6obpgDQGcFmaJgB
         output_format="mp3_22050_32",
         text=text,
         model_id="eleven_multilingual_v2",
@@ -241,6 +242,9 @@ async def websocket_agent(websocket: WebSocket):
     res_queue = asyncio.Queue()
     audioBytes = bytearray()
 
+    llm = websocket.query_params.get("llm", "openai").lower()
+    print(f"[AGENT] Using LLM: {llm}")
+
     try:
         mood_confidence = 0.0
         question_counter = 0
@@ -271,9 +275,20 @@ async def websocket_agent(websocket: WebSocket):
             if question_counter == 0:
                 question = "Hello! How are you feeling today?"
             else:
-                question = await get_next_question(
-                    qa_pairs, moods, current_depth, max_depth
-                )
+                try:
+                    if llm == "openai":
+                        question = await openai_get_next_question(
+                            qa_pairs, moods, current_depth, max_depth
+                        )
+                    else:
+                        question = await gemini_get_next_question(
+                            qa_pairs, moods, current_depth, max_depth
+                        )
+                    print(f"[AGENT] Generated next question: {question}")
+                    print(f"[AGENT] Question type: {type(question)}")
+                except Exception as e:
+                    print(f"[AGENT] Error generating next question: {e}")
+                    raise
 
             # ask question
             print(f"[AGENT] Question {question_counter + 1}: {question}")
@@ -339,9 +354,14 @@ async def websocket_agent(websocket: WebSocket):
 
             # analyze response
             await websocket.send_json({"type": "analyzing"})
-            mood, mood_confidence = await analyze_mood(
-                qa_pairs, moods, question, answer_transcript
-            )
+            if llm == "openai":
+                mood, mood_confidence = await openai_analyze_mood(
+                    qa_pairs, moods, question, answer_transcript
+                )
+            else:
+                mood, mood_confidence = await gemini_analyze_mood(
+                    qa_pairs, moods, question, answer_transcript
+                )
 
             # determine depth of detected emotion
             current_depth = get_emotion_depth(mood, wheel)

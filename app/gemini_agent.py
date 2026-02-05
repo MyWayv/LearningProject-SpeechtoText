@@ -6,7 +6,7 @@ from app.deps import get_gemini_client
 from app.wheel_of_emotions import get_wheel_of_emotions
 
 
-async def analyze_mood(
+async def gemini_analyze_mood(
     qa_pairs: list[tuple[str, str]],
     moods: list[tuple[str, float]],
     question: str,
@@ -74,7 +74,6 @@ async def analyze_mood(
         latest_question=question,
         latest_answer=answer,
     )
-    print(prompt_filled)
 
     try:
         response = get_gemini_client().models.generate_content(
@@ -99,7 +98,7 @@ async def analyze_mood(
     return mood, mood_confidence
 
 
-async def get_next_question(
+async def gemini_get_next_question(
     qa_pairs: list[tuple[str, str]],
     moods: list[tuple[str, float]],
     current_depth: int,
@@ -175,7 +174,6 @@ async def get_next_question(
         ),
         wheel_of_emotions=get_wheel_of_emotions(),
     )
-    print(prompt_filled)
 
     try:
         response = get_gemini_client().models.generate_content(
