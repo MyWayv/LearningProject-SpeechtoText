@@ -18,7 +18,11 @@ from fastapi.websockets import WebSocketState
 from app.deps import get_elevenlabs
 from app.gemini_agent import gemini_analyze_mood, gemini_get_next_question
 from app.models import AgentSession, QAMoodPair
-from app.openai_agent import openai_analyze_mood, openai_get_next_question
+from app.openai_agent import (
+    openai_analyze_conversation_mood,
+    openai_create_conversation,
+    openai_get_conversation_next_question,
+)
 from app.services import upload_agent_audio_to_bucket, upload_agent_session
 from app.wheel_of_emotions import get_emotion_depth, get_wheel_of_emotions
 
@@ -245,6 +249,9 @@ async def websocket_agent(websocket: WebSocket):
     llm = websocket.query_params.get("llm", "openai").lower()
     print(f"[AGENT] Using LLM: {llm}")
 
+    if llm == "openai":
+        conversation_id = await openai_create_conversation(session_id)
+
     try:
         mood_confidence = 0.0
         question_counter = 0
@@ -277,8 +284,15 @@ async def websocket_agent(websocket: WebSocket):
             else:
                 try:
                     if llm == "openai":
-                        question = await openai_get_next_question(
-                            qa_pairs, moods, current_depth, max_depth
+                        # question = await openai_get_next_question(
+                        #    qa_pairs, moods, current_depth, max_depth
+                        # )
+                        question = await openai_get_conversation_next_question(
+                            current_depth,
+                            max_depth,
+                            moods[-1][0] if moods else "unknown",
+                            moods[-1][1] if moods else 0.0,
+                            conversation_id,
                         )
                     else:
                         question = await gemini_get_next_question(
@@ -355,8 +369,15 @@ async def websocket_agent(websocket: WebSocket):
             # analyze response
             await websocket.send_json({"type": "analyzing"})
             if llm == "openai":
-                mood, mood_confidence = await openai_analyze_mood(
-                    qa_pairs, moods, question, answer_transcript
+                # mood, mood_confidence = await openai_analyze_mood(
+                #    qa_pairs, moods, question, answer_transcript
+                # )
+                mood, mood_confidence = await openai_analyze_conversation_mood(
+                    current_depth,
+                    max_depth,
+                    question,
+                    answer_transcript,
+                    conversation_id,
                 )
             else:
                 mood, mood_confidence = await gemini_analyze_mood(
